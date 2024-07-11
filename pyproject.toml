@@ -1,0 +1,35 @@
+[tool.poetry]
+name = "file-retriever"
+version = "0.1.0"
+description = "BookOps file retriever for FTP/SFTP servers"
+authors = ["Charlotte Kostelic <charlottekostelic@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+
+
+[tool.poetry.dependencies]
+python = "^3.12"
+paramiko = "^3.4.0"
+types-paramiko = "^3.4.0.20240423"
+
+
+[tool.poetry.dev-dependencies]
+pytest = "^8.2.2"
+pytest-cov = "^5.0.0"
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "livetest: mark a test as hitting a live ftp/sftp server"
+]
+
+
+[tool.coverage.run]
+relative_files = true
+source = ["."]
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
