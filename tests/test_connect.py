@@ -54,6 +54,7 @@ def test_ConnectionClient_list_files(
     assert files == file_list
 
 
+@pytest.mark.tmpdir
 @pytest.mark.parametrize("port", [21, 22])
 def test_ConnectionClient_get_files_to_tmpdir(tmpdir, stub_client, mock_creds, port):
     mock_creds["port"] = port
@@ -71,17 +72,18 @@ def test_ConnectionClient_get_files_to_tmpdir(tmpdir, stub_client, mock_creds, p
     assert all_files == ["foo.mrc"]
 
 
+@pytest.mark.tmpdir
 @pytest.mark.parametrize("port", [21, 22])
-def test_ConnectionClient_get_files_to_vendor_dst_dir(
-    test_vendor_dst_dir, stub_client, mock_creds, port
+def test_ConnectionClient_get_files_to_tmpdir_dst_dir(
+    test_dst_dir, stub_client, mock_creds, port
 ):
     mock_creds["port"] = port
     mock_creds["dst_dir"] = "tests/dst_dir/"
     connect = ConnectionClient(**mock_creds)
     new_files = connect.get_files(time_delta=1)
-    new_files_count = len(os.listdir(test_vendor_dst_dir))
+    new_files_count = len(os.listdir(test_dst_dir))
     old_files = connect.get_files(time_delta=20)
-    old_files_count = len(os.listdir(test_vendor_dst_dir))
+    old_files_count = len(os.listdir(test_dst_dir))
     assert new_files_count == 0
     assert old_files_count == 1
     assert new_files == []

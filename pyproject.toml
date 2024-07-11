@@ -21,7 +21,8 @@ pytest-cov = "^5.0.0"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
-    "livetest: mark a test as hitting a live ftp/sftp server"
+    "livetest: mark a test as hitting a live ftp/sftp server",
+    "tmpdir: mark a test as using the pytest tmpdir fixture",
 ]
 
 

@@ -121,3 +121,4 @@ tests/creds.yaml
 envar*.yaml
 config.yaml
 creds.yaml
+temp/*

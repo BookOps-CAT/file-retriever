@@ -156,7 +156,7 @@ def mock_creds() -> Dict[str, str]:
 
 
 @pytest.fixture
-def test_vendor_dst_dir() -> Generator:
+def test_dst_dir() -> Generator:
     dst = "tests/dst_dir/"
     if not os.path.exists(dst):
         os.makedirs(dst)
