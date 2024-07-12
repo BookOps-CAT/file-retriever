@@ -85,10 +85,14 @@ class _sftpClient:
         Returns:
             list of files in file_dir
 
+        Raises:
+            OSError: if file_dir does not exist
         """
-
-        files = self.connection.listdir(file_dir)
-        return files
+        try:
+            files = self.connection.listdir(file_dir)
+            return files
+        except OSError:
+            raise
 
     def get_file_data(self, file: str, file_dir: str) -> paramiko.SFTPAttributes:
         """
@@ -102,10 +106,14 @@ class _sftpClient:
         Returns:
             `paramiko.SFTPAttributes` object
 
+        Raises:
+            OSError: if file does not exist
         """
-
-        file_data = self.connection.stat(f"{file_dir}/{file}")
-        return file_data
+        try:
+            file_data = self.connection.stat(f"{file_dir}/{file}")
+            return file_data
+        except OSError:
+            raise
 
     def retrieve_file(self, file: str, dst_dir: str) -> None:
         """
@@ -195,11 +203,16 @@ class _ftpClient:
         Returns:
             list of files in file_dir
 
+        Raises:
+            OSError: if file_dir does not exist
         """
         files: list = []
-        self.connection.cwd(file_dir)
-        self.connection.retrlines("NLST", files.append)
-        return files
+        try:
+            self.connection.cwd(file_dir)
+            self.connection.retrlines("NLST", files.append)
+            return files
+        except OSError:
+            raise
 
     def get_file_data(self, file: str, file_dir: str) -> os.stat_result:
         """
@@ -210,11 +223,16 @@ class _ftpClient:
 
         Returns:
             `os.stat_result`s
-        """
 
-        self.connection.cwd(file_dir)
-        file_data = os.stat(file)
-        return file_data
+        Raises:
+            OSError: if file does not exist
+        """
+        try:
+            self.connection.cwd(file_dir)
+            file_data = os.stat(file)
+            return file_data
+        except OSError:
+            raise
 
     def retrieve_file(self, file: str, dst_dir: str) -> None:
         """

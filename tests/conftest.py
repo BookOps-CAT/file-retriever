@@ -176,3 +176,23 @@ def mock_open_file(mocker):
     m = mocker.mock_open()
     mocker.patch("builtins.open", m)
     return m
+
+
+class MockOSError:
+    """Mock response from FTP server for a successful login"""
+
+    def __init__(self):
+        raise OSError
+
+
+@pytest.fixture
+def stub_client_errors(monkeypatch, stub_client):
+    def mock_error(*args, **kwargs):
+        return MockOSError()
+
+    monkeypatch.setattr(MockFTP, "cwd", mock_error)
+    monkeypatch.setattr(MockFTP, "retrlines", mock_error)
+    monkeypatch.setattr(MockFTP, "retrbinary", mock_error)
+    monkeypatch.setattr(MockSFTPClient, "listdir", mock_error)
+    monkeypatch.setattr(MockSFTPClient, "stat", mock_error)
+    monkeypatch.setattr(MockSFTPClient, "get", mock_error)
