@@ -5,11 +5,11 @@ to interact with files and directories.
 
 """
 
+import datetime
 import ftplib
 import os
-from typing import List, Optional
 import paramiko
-import datetime
+from typing import List, Optional
 
 
 class _sftpClient:
@@ -100,17 +100,19 @@ class _sftpClient:
         file_data = self.connection.stat(f"{self.src_dir}/{file}")
         return file_data
 
-    def retrieve_files(self, files: List[str], dst_dir: str) -> None:
+    def retrieve_file(self, file: str, dst_dir: str) -> None:
         """
-        Downloads files from server to `dst_dir`.
+        Downloads file from server to `dst_dir`.
 
         Args:
-            files: list of files to download
-            dst_dir: directory to download files to
+            files: file to download
+            dst_dir: directory to download file to
         """
         with self.connection as client:
-            for file in files:
-                client.get(file, f"{dst_dir + file}")
+            try:
+                client.get(file, f"{dst_dir}/{file}")
+            except OSError:
+                raise
 
 
 class _ftpClient:
@@ -203,18 +205,20 @@ class _ftpClient:
         file_data = os.stat(filename)
         return file_data
 
-    def retrieve_files(self, files: List[str], dst_dir: str) -> None:
+    def retrieve_file(self, file: str, dst_dir: str) -> None:
         """
-        Downloads files from server to `dst_dir`.
+        Downloads file from server to `dst_dir`.
 
         Args:
-            files: list of files to download
-            dst_dir: directory to download files to
+            file: file to download
+            dst_dir: directory to download file to
         """
         with self.connection as client:
-            for file in files:
-                with open(f"{dst_dir + file}", "wb") as f:
+            try:
+                with open(f"{dst_dir}/{file}", "wb") as f:
                     client.retrbinary(f"RETR {file}", f.write)
+            except OSError:
+                raise
 
 
 class ConnectionClient:
@@ -345,5 +349,6 @@ class ConnectionClient:
                         get_files.append(file)
             else:
                 get_files = [i for i in files]
-            client.retrieve_files(files=get_files, dst_dir=file_dir)
-        return os.listdir(file_dir)
+            for file in get_files:
+                client.retrieve_file(file=file, dst_dir=file_dir)
+        return get_files

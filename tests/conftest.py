@@ -3,8 +3,7 @@ import ftplib
 import json
 import os
 import paramiko
-import shutil
-from typing import List, Optional, Dict, Generator
+from typing import List, Optional, Dict
 
 import pytest
 
@@ -16,25 +15,29 @@ class FakeUtcNow(datetime.datetime):
 
 
 class MockFileProperties:
-    """Mock response from SSH for a successful login"""
+    """File properties for a mock file object."""
 
     def __init__(self):
         pass
 
     @property
     def st_size(self, *args, **kwargs):
+        """file size in bytes"""
         return 140401
 
     @property
     def st_mode(self, *args, **kwargs):
+        """33261 is equivalent to -rw-r--r--"""
         return 33261
 
     @property
     def st_atime(self, *args, **kwargs):
+        """1704132000 is equivalent to 2024-01-05 01:00:00"""
         return 1704132000
 
     @property
     def st_mtime(self, *args, **kwargs):
+        """1704132000 is equivalent to 2024-01-05 01:00:00"""
         return 1704132000
 
 
@@ -48,7 +51,7 @@ class MockFTP:
         return self
 
     def __exit__(self, *args) -> None:
-        pass
+        self.close()
 
     def login(self, *args, **kwargs) -> None:
         pass
@@ -75,11 +78,7 @@ class MockFTP:
         return args[1](files)
 
     def retrbinary(self, *args, **kwargs) -> None:
-        if args[0] == "RETR":
-            file = "foo.mrc"
-            args[1](file)
-        else:
-            pass
+        pass
 
     def close(self, *args, **kwargs) -> None:
         pass
@@ -95,19 +94,19 @@ class MockSFTPClient:
         return self
 
     def __exit__(self, *args) -> None:
-        pass
+        self.close()
 
     def listdir(self, *args, **kwargs) -> List[str]:
         return ["foo.mrc"]
-
-    def close(self, *args, **kwargs) -> None:
-        pass
 
     def stat(self, *args, **kwargs) -> MockFileProperties:
         return MockFileProperties()
 
     def get(self, *args, **kwargs) -> None:
         open(args[1], "x+")
+
+    def close(self, *args, **kwargs) -> None:
+        pass
 
 
 class MockSSHClient:
@@ -127,41 +126,31 @@ class MockSSHClient:
 
 
 @pytest.fixture
-def stub_client(monkeypatch, tmpdir):
+def stub_client(monkeypatch):
     def mock_ftp_client(*args, **kwargs):
+        def mock_stat(*args, **kwargs):
+            return MockFileProperties()
+
+        monkeypatch.setattr(os, "stat", mock_stat)
         return MockFTP()
 
     def mock_ssh_client(*args, **kwargs):
         return MockSSHClient()
 
-    def mock_file(*args, **kwargs):
-        return MockFileProperties()
-
     monkeypatch.setattr(ftplib, "FTP", mock_ftp_client)
     monkeypatch.setattr(paramiko, "SSHClient", mock_ssh_client)
-    monkeypatch.setattr(os, "stat", mock_file)
     monkeypatch.setattr(datetime, "datetime", FakeUtcNow)
 
 
 @pytest.fixture
-def mock_creds() -> Dict[str, str]:
+def stub_creds() -> Dict[str, str]:
     return {
         "vendor": "test",
-        "host": "ftp2.testvendor.com",
+        "host": "ftp.testvendor.com",
         "username": "test_username",
-        "password": "testPASSWORD",
+        "password": "test_password",
         "src_dir": "testdir",
-        "dst_dir": "NSDROP/vendor_loads/test/",
     }
-
-
-@pytest.fixture
-def test_dst_dir() -> Generator:
-    dst = "tests/dst_dir/"
-    if not os.path.exists(dst):
-        os.makedirs(dst)
-    yield dst
-    shutil.rmtree("tests/dst_dir/")
 
 
 @pytest.fixture
@@ -182,3 +171,10 @@ def live_ftp_creds() -> Dict[str, str]:
     creds["vendor"] = "leila"
     creds["dst_dir"] = "tests/NSDROP/vendor_loads/leila"
     return creds
+
+
+@pytest.fixture
+def mock_open_file(mocker):
+    m = mocker.mock_open()
+    mocker.patch("builtins.open", m)
+    return m
