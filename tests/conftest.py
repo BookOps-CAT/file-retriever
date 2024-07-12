@@ -145,11 +145,9 @@ def stub_client(monkeypatch):
 @pytest.fixture
 def stub_creds() -> Dict[str, str]:
     return {
-        "vendor": "test",
         "host": "ftp.testvendor.com",
         "username": "test_username",
         "password": "test_password",
-        "src_dir": "testdir",
     }
 
 
