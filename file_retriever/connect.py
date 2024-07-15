@@ -272,7 +272,6 @@ class ConnectionClient:
             host: server address
             port: port number for server
             src_dir: directory on server to interact with
-            dst_dir: directory to download files to
         """
 
         self.vendor = vendor

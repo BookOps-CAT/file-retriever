@@ -241,6 +241,25 @@ def test_ConnectionClient_get_files_with_time_delta(
     assert old_files == ["foo.mrc"]
 
 
+@pytest.mark.parametrize(
+    "port",
+    [21, 22],
+)
+def test_ConnectionClient_get_files_no_args(
+    stub_client, mock_open_file, stub_creds, port
+):
+    (
+        stub_creds["port"],
+        stub_creds["src_dir"],
+        stub_creds["vendor"],
+    ) = (port, "testdir", "test")
+    connect = ConnectionClient(**stub_creds)
+    files = connect.get_files()
+    file_count = len(files)
+    assert file_count == 1
+    assert files == ["foo.mrc"]
+
+
 @pytest.mark.parametrize("port, client_type", [(21, _ftpClient), (22, _sftpClient)])
 def test_ConnectionClient_get_files_OSError(
     stub_client_errors, stub_creds, port, client_type
@@ -257,16 +276,24 @@ def test_ConnectionClient_get_files_OSError(
 
 
 @pytest.mark.livetest
-def test_ConnectionClient_live_test(live_ftp_creds, live_sftp_creds):
+def test_ConnectionClient_ftp_live_test(live_ftp_creds):
     live_ftp = ConnectionClient(**live_ftp_creds)
-    live_sftp = ConnectionClient(**live_sftp_creds)
-    ftp_files = live_ftp.client.list_file_data(live_ftp_creds["src_dir"])
-    sftp_files = live_sftp.client.list_file_data(live_sftp_creds["src_dir"])
+    files_ftpClient = live_ftp.client.list_file_data(live_ftp_creds["src_dir"])
+    files_ConnectionClient = live_ftp.list_files()
     assert datetime.datetime.fromtimestamp(
-        ftp_files[0].file_mtime
+        files_ftpClient[0].file_mtime
     ) >= datetime.datetime(2020, 1, 1)
-    assert datetime.datetime.fromtimestamp(
-        sftp_files[0].file_mtime
-    ) >= datetime.datetime(2020, 1, 1)
+    assert len(files_ConnectionClient) > 1
     assert "220" in live_ftp.client.connection.getwelcome()
+
+
+@pytest.mark.livetest
+def test_ConnectionClient_sftp_live_test(live_sftp_creds):
+    live_sftp = ConnectionClient(**live_sftp_creds)
+    files_sftpClient = live_sftp.client.list_file_data(live_sftp_creds["src_dir"])
+    files_ConnectionClient = live_sftp.list_files()
+    assert datetime.datetime.fromtimestamp(
+        files_sftpClient[0].file_mtime
+    ) >= datetime.datetime(2020, 1, 1)
+    assert len(files_ConnectionClient) > 1
     assert live_sftp.client.connection.get_channel().active == 1
