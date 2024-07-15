@@ -5,6 +5,36 @@ import pytest
 from file_retriever.connect import ConnectionClient, _ftpClient, _sftpClient, File
 
 
+def test_File():
+    file = File(file_name="foo.mrc", file_mtime=1704070800)
+    assert file.file_name == "foo.mrc"
+    assert file.file_mtime == 1704070800
+
+
+def test_File_from_SFTPAttributes(mock_file):
+    file = File.from_SFTPAttributes(file="foo.mrc", file_data=mock_file)
+    assert file.file_name == "foo.mrc"
+    assert file.file_mtime == 1704070800
+
+
+def test_File_from_SFTPAttributes_AttributeError(mock_file_error):
+    with pytest.raises(AttributeError):
+        File.from_SFTPAttributes(file=1704070800, file_data=mock_file_error)
+
+
+def test_File_from_MDTM_response():
+    MDTM_response = "220 20240101010000"
+    file = File.from_MDTM_response(file="foo.mrc", file_data=MDTM_response)
+    assert file.file_name == "foo.mrc"
+    assert file.file_mtime == 1704070800
+
+
+def test_File_from_MDTM_response_ValueError():
+    MDTM_response = "404"
+    with pytest.raises(ValueError):
+        File.from_MDTM_response(file=1704070800, file_data=MDTM_response)
+
+
 def test_ftpClient(stub_client, stub_creds):
     stub_creds["port"] = "21"
     ftp = _ftpClient(**stub_creds)
@@ -35,7 +65,7 @@ def test_ftpClient_retrieve_file(tmp_path, stub_client, stub_creds):
     path = tmp_path / "test"
     path.mkdir()
     ftp = _ftpClient(**stub_creds)
-    ftp.retrieve_file(file="foo.mrc", dst_dir=str(path))
+    ftp.retrieve_file(file="foo.mrc", file_dir=str(path))
     assert "foo.mrc" in os.listdir(path)
 
 
@@ -43,14 +73,14 @@ def test_ftpClient_retrieve_mock_file(stub_client, stub_creds, mock_open_file):
     with does_not_raise():
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
-        ftp.retrieve_file(file="foo.mrc", dst_dir="foo")
+        ftp.retrieve_file(file="foo.mrc", file_dir="foo")
 
 
 def test_ftpClient_retrieve_file_OSError(stub_client_errors, stub_creds):
     stub_creds["port"] = "21"
     ftp = _ftpClient(**stub_creds)
     with pytest.raises(OSError):
-        ftp.retrieve_file(file="foo.mrc", dst_dir="foo")
+        ftp.retrieve_file(file="foo.mrc", file_dir="foo")
 
 
 def test_sftpClient(stub_client, stub_creds):
@@ -83,7 +113,7 @@ def test_sftpClient_retrieve_file(tmp_path, stub_client, stub_creds):
     path = tmp_path / "test"
     path.mkdir()
     sftp = _ftpClient(**stub_creds)
-    sftp.retrieve_file(file="foo.mrc", dst_dir=str(path))
+    sftp.retrieve_file(file="foo.mrc", file_dir=str(path))
     assert "foo.mrc" in os.listdir(path)
 
 
@@ -91,14 +121,14 @@ def test_sftpClient_retrieve_mock_file(stub_client, stub_creds, mock_open_file):
     with does_not_raise():
         stub_creds["port"] = "22"
         sftp = _ftpClient(**stub_creds)
-        sftp.retrieve_file(file="foo.mrc", dst_dir="foo")
+        sftp.retrieve_file(file="foo.mrc", file_dir="foo")
 
 
 def test_sftpClient_retrieve_file_OSError(stub_client_errors, stub_creds):
     stub_creds["port"] = "22"
     sftp = _sftpClient(**stub_creds)
     with pytest.raises(OSError):
-        sftp.retrieve_file(file="foo.mrc", dst_dir="foo")
+        sftp.retrieve_file(file="foo.mrc", file_dir="foo")
 
 
 @pytest.mark.parametrize(
@@ -117,27 +147,24 @@ def test_sftpClient_retrieve_file_OSError(stub_client_errors, stub_creds):
 def test_ConnectionClient(stub_client, stub_creds, port, client_type):
     (
         stub_creds["port"],
-        stub_creds["dst_dir"],
         stub_creds["src_dir"],
         stub_creds["vendor"],
-    ) = (port, "NSDROP/vendor_loads/test", "testdir", "test")
+    ) = (port, "testdir", "test")
     connect = ConnectionClient(**stub_creds)
     assert connect.vendor == "test"
     assert connect.username == "test_username"
     assert connect.host == "ftp.testvendor.com"
     assert connect.port == port
     assert connect.src_dir == "testdir"
-    assert connect.dst_dir == f"NSDROP/vendor_loads/{connect.vendor.lower()}"
     assert isinstance(connect.client, client_type)
 
 
 def test_ConnectionClient_invalid_creds(stub_client, stub_creds):
     (
         stub_creds["port"],
-        stub_creds["dst_dir"],
         stub_creds["src_dir"],
         stub_creds["vendor"],
-    ) = (1, "NSDROP/vendor_loads/test", "testdir", "test")
+    ) = (1, "testdir", "test")
     with pytest.raises(ValueError) as e:
         ConnectionClient(**stub_creds)
     assert f"Invalid port number {stub_creds['port']}" in str(e)
@@ -161,10 +188,9 @@ def test_ConnectionClient_list_files(
 ):
     (
         stub_creds["port"],
-        stub_creds["dst_dir"],
         stub_creds["src_dir"],
         stub_creds["vendor"],
-    ) = (port, "NSDROP/vendor_loads/test", "testdir", "test")
+    ) = (port, "testdir", "test")
     connect = ConnectionClient(**stub_creds)
     files = connect.list_files(time_delta, src_file_dir=src)
     assert files == file_list
@@ -172,17 +198,16 @@ def test_ConnectionClient_list_files(
 
 @pytest.mark.parametrize(
     "port, src, dst",
-    [(21, "foo", "bar"), (21, None, None), (22, "foo", "bar"), (22, None, None)],
+    [(21, "foo", "bar"), (22, "foo", "bar")],
 )
 def test_ConnectionClient_get_files(
     stub_client, mock_open_file, stub_creds, port, src, dst
 ):
     (
         stub_creds["port"],
-        stub_creds["dst_dir"],
         stub_creds["src_dir"],
         stub_creds["vendor"],
-    ) = (port, "NSDROP/vendor_loads/test", "testdir", "test")
+    ) = (port, "testdir", "test")
     connect = ConnectionClient(**stub_creds)
     files = connect.get_files(src_file_dir=src, dst_file_dir=dst)
     file_count = len(files)
@@ -194,9 +219,7 @@ def test_ConnectionClient_get_files(
     "port, src, dst",
     [
         (21, "src_dir", "dst_dir"),
-        (21, None, None),
         (22, "src_dir", "dst_dir"),
-        (22, None, None),
     ],
 )
 def test_ConnectionClient_get_files_with_time_delta(
@@ -204,10 +227,9 @@ def test_ConnectionClient_get_files_with_time_delta(
 ):
     (
         stub_creds["port"],
-        stub_creds["dst_dir"],
         stub_creds["src_dir"],
         stub_creds["vendor"],
-    ) = (port, "NSDROP/vendor_loads/test", "testdir", "test")
+    ) = (port, "testdir", "test")
     connect = ConnectionClient(**stub_creds)
     new_files = connect.get_files(time_delta=1, src_file_dir=src, dst_file_dir=dst)
     new_files_count = len(new_files)
@@ -220,13 +242,14 @@ def test_ConnectionClient_get_files_with_time_delta(
 
 
 @pytest.mark.parametrize("port, client_type", [(21, _ftpClient), (22, _sftpClient)])
-def test_ConnectionClient_get_files_OSError(stub_client, stub_creds, port, client_type):
+def test_ConnectionClient_get_files_OSError(
+    stub_client_errors, stub_creds, port, client_type
+):
     (
         stub_creds["port"],
-        stub_creds["dst_dir"],
         stub_creds["src_dir"],
         stub_creds["vendor"],
-    ) = (port, "NSDROP/vendor_loads/test", "testdir", "test")
+    ) = (port, "testdir", "test")
     connect = ConnectionClient(**stub_creds)
     with pytest.raises(OSError):
         connect.get_files()

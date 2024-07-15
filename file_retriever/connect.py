@@ -21,10 +21,10 @@ class File:
     def from_SFTPAttributes(
         cls, file: str, file_data: paramiko.SFTPAttributes
     ) -> "File":
-        if file_data.st_mtime is not None:
-            return cls(file_name=file, file_mtime=file_data.st_mtime)
+        if file_data.st_mtime is None:
+            raise AttributeError
         else:
-            raise ValueError("Missing file modification time")
+            return cls(file_name=file, file_mtime=file_data.st_mtime)
 
     @classmethod
     def from_MDTM_response(cls, file: str, file_data: str) -> "File":
@@ -128,7 +128,7 @@ class _ftpClient:
         except OSError:
             raise
 
-    def retrieve_file(self, file: str, dst_dir: str) -> None:
+    def retrieve_file(self, file: str, file_dir: str) -> None:
         """
         Downloads file from server to `dst_dir`.
 
@@ -138,7 +138,7 @@ class _ftpClient:
         """
         with self.connection as client:
             try:
-                with open(f"{dst_dir}/{file}", "wb") as f:
+                with open(f"{file_dir}/{file}", "wb") as f:
                     client.retrbinary(f"RETR {file}", f.write)
             except OSError:
                 raise
@@ -232,9 +232,9 @@ class _sftpClient:
         except OSError:
             raise
 
-    def retrieve_file(self, file: str, dst_dir: str) -> None:
+    def retrieve_file(self, file: str, file_dir: str) -> None:
         """
-        Downloads file from server to `dst_dir`.
+        Downloads file from server to `file_dir`.
 
         Args:
             files: file to download
@@ -242,7 +242,7 @@ class _sftpClient:
         """
         with self.connection as client:
             try:
-                client.get(file, f"{dst_dir}/{file}")
+                client.get(file, f"{file_dir}/{file}")
             except OSError:
                 raise
 
@@ -262,7 +262,6 @@ class ConnectionClient:
         host: str,
         port: Literal[21, 22, "21", "22"],
         src_dir: str,
-        dst_dir: str,
     ):
         """Initializes client instance.
 
@@ -282,7 +281,6 @@ class ConnectionClient:
         self.host = host
         self.port = port
         self.src_dir = src_dir
-        self.dst_dir = dst_dir
 
         self.client = self._create_client()
 
@@ -342,15 +340,14 @@ class ConnectionClient:
         self,
         time_delta: int = 0,
         src_file_dir: Optional[str] = None,
-        dst_file_dir: Optional[str] = None,
+        dst_file_dir: str = ".",
     ) -> List[str]:
         """
         Downloads files from server to `file_dir`. If `src_file_dir` is not provided
         then files will be downloaded from `src_dir` provided during initialization
         of object. If `dst_file_dir` is not provided then files will be downloaded
-        to `dst_dir` provided during initialization of object. If `time_delta`
-        is provided then files created in the last x days will be downloaded
-        where x is the `time_delta`.
+        to cwd. If `time_delta` is provided then files created in the last x days
+        will be downloaded where x is the `time_delta`.
 
         Args:
             time_delta: number of days to go back in time to list files
@@ -364,8 +361,6 @@ class ConnectionClient:
 
         if not src_file_dir:
             src_file_dir = self.src_dir
-        if not dst_file_dir:
-            dst_file_dir = self.dst_dir
         with self.client as client:
             files = client.list_file_data(src_file_dir)
             if time_delta > 0:
@@ -380,5 +375,5 @@ class ConnectionClient:
             else:
                 get_files = [i.file_name for i in files]
             for file in get_files:
-                client.retrieve_file(file=file, dst_dir=dst_file_dir)
+                client.retrieve_file(file=file, file_dir=dst_file_dir)
         return get_files

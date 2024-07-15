@@ -21,14 +21,26 @@ class MockFileProperties:
         pass
 
     @property
-    def st_atime(self, *args, **kwargs):
-        """1704070800 is equivalent to 2024-01-01 01:00:00"""
-        return 1704070800
-
-    @property
     def st_mtime(self, *args, **kwargs):
         """1704070800 is equivalent to 2024-01-01 01:00:00"""
         return 1704070800
+
+
+class MockFileError:
+    """Mock response from FTP server for a successful login"""
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+
+@pytest.fixture
+def mock_file():
+    return MockFileProperties()
+
+
+@pytest.fixture
+def mock_file_error():
+    return MockFileError()
 
 
 class MockFTP:
@@ -156,7 +168,6 @@ def live_sftp_creds() -> Dict[str, str]:
     cred_file = open(cred_path, "r")
     creds = json.load(cred_file)
     creds["vendor"] = "eastview"
-    creds["dst_dir"] = "tests/NSDROP/vendor_loads/eastview"
     return creds
 
 
@@ -166,7 +177,6 @@ def live_ftp_creds() -> Dict[str, str]:
     cred_file = open(cred_path, "r")
     creds = json.load(cred_file)
     creds["vendor"] = "leila"
-    creds["dst_dir"] = "tests/NSDROP/vendor_loads/leila"
     return creds
 
 
@@ -189,10 +199,8 @@ def stub_client_errors(monkeypatch, stub_client):
     def mock_error(*args, **kwargs):
         return MockOSError()
 
-    monkeypatch.setattr(MockFTP, "cwd", mock_error)
     monkeypatch.setattr(MockFTP, "nlst", mock_error)
     monkeypatch.setattr(MockFTP, "retrbinary", mock_error)
     monkeypatch.setattr(MockSFTPClient, "listdir", mock_error)
     monkeypatch.setattr(MockSFTPClient, "stat", mock_error)
     monkeypatch.setattr(MockSFTPClient, "get", mock_error)
-    monkeypatch.setattr(os, "stat", mock_error)
