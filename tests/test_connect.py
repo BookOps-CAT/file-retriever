@@ -1,7 +1,8 @@
+import datetime
 import os
 from contextlib import nullcontext as does_not_raise
 import pytest
-from file_retriever.connect import ConnectionClient, _ftpClient, _sftpClient
+from file_retriever.connect import ConnectionClient, _ftpClient, _sftpClient, File
 
 
 def test_ftpClient(stub_client, stub_creds):
@@ -14,35 +15,18 @@ def test_ftpClient(stub_client, stub_creds):
     assert ftp.connection is not None
 
 
-def test_ftpClient_list_file_names(stub_client, stub_creds):
+def test_ftpClient_list_file_data(stub_client, stub_creds):
     stub_creds["port"] = "21"
     ftp = _ftpClient(**stub_creds)
-    files = ftp.list_file_names("testdir")
-    assert files == ["foo.mrc"]
+    files = ftp.list_file_data("testdir")
+    assert files == [File(file_name="foo.mrc", file_mtime=1704070800)]
 
 
-def test_ftpClient_list_file_names_OSError(stub_client_errors, stub_creds):
-    stub_creds["port"] = "21"
-    ftp = _ftpClient(**stub_creds)
-    with pytest.raises(OSError):
-        ftp.list_file_names("testdir")
-
-
-def test_ftpClient_get_file_data(stub_client, stub_creds):
-    stub_creds["port"] = "21"
-    ftp = _ftpClient(**stub_creds)
-    file_data = ftp.get_file_data("foo.mrc", "testdir")
-    assert file_data.st_size == 140401
-    assert file_data.st_mode == 33261
-    assert file_data.st_atime == 1704132000
-    assert file_data.st_mtime == 1704132000
-
-
-def test_ftpClient_get_file_data_OSError(stub_client_errors, stub_creds):
+def test_ftpClient_list_file_data_OSError(stub_client_errors, stub_creds):
     stub_creds["port"] = "21"
     ftp = _ftpClient(**stub_creds)
     with pytest.raises(OSError):
-        ftp.get_file_data("foo.mrc", "testdir")
+        ftp.list_file_data("testdir")
 
 
 @pytest.mark.tmpdir
@@ -79,35 +63,18 @@ def test_sftpClient(stub_client, stub_creds):
     assert sftp.connection is not None
 
 
-def test_sftpClient_list_file_names(stub_client, stub_creds):
+def test_sftpClient_list_file_data(stub_client, stub_creds):
     stub_creds["port"] = "22"
-    sftp = _sftpClient(**stub_creds)
-    files = sftp.list_file_names("testdir")
-    assert files == ["foo.mrc"]
+    ftp = _sftpClient(**stub_creds)
+    files = ftp.list_file_data("testdir")
+    assert files == [File(file_name="foo.mrc", file_mtime=1704070800)]
 
 
-def test_sftpClient_list_file_names_OSError(stub_client_errors, stub_creds):
-    stub_creds["port"] = "22"
-    sftp = _sftpClient(**stub_creds)
-    with pytest.raises(OSError):
-        sftp.list_file_names("testdir")
-
-
-def test_sftpClient_get_file_data(stub_client, stub_creds):
-    stub_creds["port"] = "22"
-    sftp = _sftpClient(**stub_creds)
-    file_data = sftp.get_file_data("foo.mrc", "testdir")
-    assert file_data.st_size == 140401
-    assert file_data.st_mode == 33261
-    assert file_data.st_atime == 1704132000
-    assert file_data.st_mtime == 1704132000
-
-
-def test_sftpClient_get_file_data_OSError(stub_client_errors, stub_creds):
+def test_sftpClient_list_file_data_OSError(stub_client_errors, stub_creds):
     stub_creds["port"] = "22"
     sftp = _sftpClient(**stub_creds)
     with pytest.raises(OSError):
-        sftp.get_file_data("foo.mrc", "testdir")
+        sftp.list_file_data("testdir")
 
 
 @pytest.mark.tmpdir
@@ -179,8 +146,8 @@ def test_ConnectionClient_invalid_creds(stub_client, stub_creds):
 @pytest.mark.parametrize(
     "time_delta, file_list, port, src",
     [
-        (None, ["foo.mrc"], 21, None),
-        (None, ["foo.mrc"], 21, "foo"),
+        (0, ["foo.mrc"], 21, None),
+        (0, ["foo.mrc"], 21, "foo"),
         (1, [], 22, None),
         (1, [], 22, "foo"),
         (2, [], 22, None),
@@ -270,5 +237,13 @@ def test_ConnectionClient_get_files_OSError(stub_client, stub_creds, port, clien
 def test_ConnectionClient_live_test(live_ftp_creds, live_sftp_creds):
     live_ftp = ConnectionClient(**live_ftp_creds)
     live_sftp = ConnectionClient(**live_sftp_creds)
+    ftp_files = live_ftp.client.list_file_data(live_ftp_creds["src_dir"])
+    sftp_files = live_sftp.client.list_file_data(live_sftp_creds["src_dir"])
+    assert datetime.datetime.fromtimestamp(
+        ftp_files[0].file_mtime
+    ) >= datetime.datetime(2020, 1, 1)
+    assert datetime.datetime.fromtimestamp(
+        sftp_files[0].file_mtime
+    ) >= datetime.datetime(2020, 1, 1)
     assert "220" in live_ftp.client.connection.getwelcome()
     assert live_sftp.client.connection.get_channel().active == 1

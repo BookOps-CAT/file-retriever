@@ -21,24 +21,14 @@ class MockFileProperties:
         pass
 
     @property
-    def st_size(self, *args, **kwargs):
-        """file size in bytes"""
-        return 140401
-
-    @property
-    def st_mode(self, *args, **kwargs):
-        """33261 is equivalent to -rw-r--r--"""
-        return 33261
-
-    @property
     def st_atime(self, *args, **kwargs):
-        """1704132000 is equivalent to 2024-01-05 01:00:00"""
-        return 1704132000
+        """1704070800 is equivalent to 2024-01-01 01:00:00"""
+        return 1704070800
 
     @property
     def st_mtime(self, *args, **kwargs):
-        """1704132000 is equivalent to 2024-01-05 01:00:00"""
-        return 1704132000
+        """1704070800 is equivalent to 2024-01-01 01:00:00"""
+        return 1704070800
 
 
 class MockFTP:
@@ -77,11 +67,17 @@ class MockFTP:
             pass
         return args[1](files)
 
+    def nlst(self, *args, **kwargs) -> List[str]:
+        return ["foo.mrc"]
+
     def retrbinary(self, *args, **kwargs) -> None:
         pass
 
     def close(self, *args, **kwargs) -> None:
         pass
+
+    def voidcmd(self, *args, **kwargs) -> str:
+        return "220 20240101010000"
 
 
 class MockSFTPClient:
@@ -95,6 +91,9 @@ class MockSFTPClient:
 
     def __exit__(self, *args) -> None:
         self.close()
+
+    def chdir(self, *args, **kwargs) -> None:
+        pass
 
     def listdir(self, *args, **kwargs) -> List[str]:
         return ["foo.mrc"]
@@ -128,18 +127,18 @@ class MockSSHClient:
 @pytest.fixture
 def stub_client(monkeypatch):
     def mock_ftp_client(*args, **kwargs):
-        def mock_stat(*args, **kwargs):
-            return MockFileProperties()
-
-        monkeypatch.setattr(os, "stat", mock_stat)
         return MockFTP()
 
     def mock_ssh_client(*args, **kwargs):
         return MockSSHClient()
 
+    def mock_stat(*args, **kwargs):
+        return MockFileProperties()
+
     monkeypatch.setattr(ftplib, "FTP", mock_ftp_client)
     monkeypatch.setattr(paramiko, "SSHClient", mock_ssh_client)
     monkeypatch.setattr(datetime, "datetime", FakeUtcNow)
+    monkeypatch.setattr(os, "stat", mock_stat)
 
 
 @pytest.fixture
@@ -191,8 +190,9 @@ def stub_client_errors(monkeypatch, stub_client):
         return MockOSError()
 
     monkeypatch.setattr(MockFTP, "cwd", mock_error)
-    monkeypatch.setattr(MockFTP, "retrlines", mock_error)
+    monkeypatch.setattr(MockFTP, "nlst", mock_error)
     monkeypatch.setattr(MockFTP, "retrbinary", mock_error)
     monkeypatch.setattr(MockSFTPClient, "listdir", mock_error)
     monkeypatch.setattr(MockSFTPClient, "stat", mock_error)
     monkeypatch.setattr(MockSFTPClient, "get", mock_error)
+    monkeypatch.setattr(os, "stat", mock_error)

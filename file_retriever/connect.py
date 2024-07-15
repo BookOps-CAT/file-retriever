@@ -5,129 +5,39 @@ to interact with files and directories.
 
 """
 
+from dataclasses import dataclass
 import datetime
 import ftplib
-import os
 import paramiko
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 
-class _sftpClient:
-    """
-    An SFTP client to use when interacting with remote storage. Supports
-    interactions with servers via the `paramiko` library.
-    """
+@dataclass
+class File:
+    file_name: str
+    file_mtime: float
 
-    def __init__(
-        self,
-        username: str,
-        password: str,
-        host: str,
-        port: str | int,
-    ):
-        """Initializes client instance.
+    @classmethod
+    def from_SFTPAttributes(
+        cls, file: str, file_data: paramiko.SFTPAttributes
+    ) -> "File":
+        if file_data.st_mtime is not None:
+            return cls(file_name=file, file_mtime=file_data.st_mtime)
+        else:
+            raise ValueError("Missing file modification time")
 
-        Args:
-            username: username for server
-            password: password for server
-            host: server address
-            port: port number for server
-
-        """
-        self.username = username
-        self.password = password
-        self.host = host
-        self.port = int(port)
-        self.connection = self._create_sftp_connection()
-
-    def __enter__(self, *args):
-        """
-        Allows for use of context manager with the `_sftpClient` class.
-
-        Opens context manager.
-        """
-        return self
-
-    def __exit__(self, *args):
-        """
-        Allows for use of context manager with the `_sftpClient` class.
-
-        Closes context manager.
-        """
-        self.connection.close()
-
-    def _create_sftp_connection(self) -> paramiko.SFTPClient:
-        """
-        Opens connection to server via SFTP.
-
-        Returns:
-            `paramiko.SFTPClient` object
-
-        """
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(
-            hostname=self.host,
-            port=self.port,
-            username=self.username,
-            password=self.password,
-        )
-        sftp_client = ssh.open_sftp()
-        return sftp_client
-
-    def list_file_names(self, file_dir: str) -> List[str]:
-        """
-        Lists each file in `file_dir` on server.
-
-        Args:
-            file_dir: directory on server to interact with
-
-        Returns:
-            list of files in file_dir
-
-        Raises:
-            OSError: if file_dir does not exist
-        """
-        try:
-            files = self.connection.listdir(file_dir)
-            return files
-        except OSError:
-            raise
-
-    def get_file_data(self, file: str, file_dir: str) -> paramiko.SFTPAttributes:
-        """
-        Gets metadata for single file on server in `file_dir`. Attributes
-        of returned object are similar to `os.stat_result`.
-
-        Args:
-            file: name of file to get metadata for.
-            file_dir: directory on server where the file is located
-
-        Returns:
-            `paramiko.SFTPAttributes` object
-
-        Raises:
-            OSError: if file does not exist
-        """
-        try:
-            file_data = self.connection.stat(f"{file_dir}/{file}")
-            return file_data
-        except OSError:
-            raise
-
-    def retrieve_file(self, file: str, dst_dir: str) -> None:
-        """
-        Downloads file from server to `dst_dir`.
-
-        Args:
-            files: file to download
-            dst_dir: directory to download file to
-        """
-        with self.connection as client:
-            try:
-                client.get(file, f"{dst_dir}/{file}")
-            except OSError:
-                raise
+    @classmethod
+    def from_MDTM_response(cls, file: str, file_data: str) -> "File":
+        if file_data[0] == "2":
+            file_mod_date = datetime.datetime.strptime(file_data[4:], "%Y%m%d%H%M%S")
+            return cls(
+                file_name=file,
+                file_mtime=file_mod_date.replace(
+                    tzinfo=datetime.timezone.utc
+                ).timestamp(),
+            )
+        else:
+            raise ValueError("Missing file modification time")
 
 
 class _ftpClient:
@@ -193,9 +103,9 @@ class _ftpClient:
         )
         return ftp_client
 
-    def list_file_names(self, file_dir: str) -> List[str]:
+    def list_file_data(self, file_dir: str) -> List[File]:
         """
-        Lists each file in `file_dir` on server.
+        Lists metadata for each file in `file_dir` on server.
 
         Args:
             file_dir: directory on server to interact with
@@ -206,31 +116,15 @@ class _ftpClient:
         Raises:
             OSError: if file_dir does not exist
         """
-        files: list = []
         try:
-            self.connection.cwd(file_dir)
-            self.connection.retrlines("NLST", files.append)
+            file_list = self.connection.nlst(file_dir)
+            files = [
+                File.from_MDTM_response(
+                    file=i, file_data=self.connection.voidcmd(f"MDTM {i}")
+                )
+                for i in file_list
+            ]
             return files
-        except OSError:
-            raise
-
-    def get_file_data(self, file: str, file_dir: str) -> os.stat_result:
-        """
-        Gets metadata for single file on server in `src_dir`.
-
-        Args:
-            file: name of file to get metadata for.
-
-        Returns:
-            `os.stat_result`s
-
-        Raises:
-            OSError: if file does not exist
-        """
-        try:
-            self.connection.cwd(file_dir)
-            file_data = os.stat(file)
-            return file_data
         except OSError:
             raise
 
@@ -250,6 +144,109 @@ class _ftpClient:
                 raise
 
 
+class _sftpClient:
+    """
+    An SFTP client to use when interacting with remote storage. Supports
+    interactions with servers via the `paramiko` library.
+    """
+
+    def __init__(
+        self,
+        username: str,
+        password: str,
+        host: str,
+        port: str | int,
+    ):
+        """Initializes client instance.
+
+        Args:
+            username: username for server
+            password: password for server
+            host: server address
+            port: port number for server
+
+        """
+        self.username = username
+        self.password = password
+        self.host = host
+        self.port = int(port)
+        self.connection = self._create_sftp_connection()
+
+    def __enter__(self, *args):
+        """
+        Allows for use of context manager with the `_sftpClient` class.
+
+        Opens context manager.
+        """
+        return self
+
+    def __exit__(self, *args):
+        """
+        Allows for use of context manager with the `_sftpClient` class.
+
+        Closes context manager.
+        """
+        self.connection.close()
+
+    def _create_sftp_connection(self) -> paramiko.SFTPClient:
+        """
+        Opens connection to server via SFTP.
+
+        Returns:
+            `paramiko.SFTPClient` object
+
+        """
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(
+            hostname=self.host,
+            port=self.port,
+            username=self.username,
+            password=self.password,
+        )
+        sftp_client = ssh.open_sftp()
+        return sftp_client
+
+    def list_file_data(self, file_dir: str) -> List[File]:
+        """
+        Lists metadata for each file in `file_dir` on server.
+
+        Args:
+            file_dir: directory on server to interact with
+
+        Returns:
+            list of files in file_dir
+
+        Raises:
+            OSError: if file_dir does not exist
+        """
+        try:
+            file_list = self.connection.listdir(file_dir)
+            files = [
+                File.from_SFTPAttributes(
+                    file=i, file_data=self.connection.stat(f"{file_dir}/{i}")
+                )
+                for i in file_list
+            ]
+            return files
+        except OSError:
+            raise
+
+    def retrieve_file(self, file: str, dst_dir: str) -> None:
+        """
+        Downloads file from server to `dst_dir`.
+
+        Args:
+            files: file to download
+            dst_dir: directory to download file to
+        """
+        with self.connection as client:
+            try:
+                client.get(file, f"{dst_dir}/{file}")
+            except OSError:
+                raise
+
+
 class ConnectionClient:
     """
     A wrapper class to use when interacting with remote storage. Creates
@@ -263,7 +260,7 @@ class ConnectionClient:
         username: str,
         password: str,
         host: str,
-        port: str | int,
+        port: Literal[21, 22, "21", "22"],
         src_dir: str,
         dst_dir: str,
     ):
@@ -283,21 +280,21 @@ class ConnectionClient:
         self.username = username
         self.password = password
         self.host = host
-        self.port = int(port)
+        self.port = port
         self.src_dir = src_dir
         self.dst_dir = dst_dir
 
         self.client = self._create_client()
 
     def _create_client(self) -> _ftpClient | _sftpClient:
-        if self.port == 21:
+        if int(self.port) == 21:
             return _ftpClient(
                 username=self.username,
                 password=self.password,
                 host=self.host,
                 port=self.port,
             )
-        elif self.port == 22:
+        elif int(self.port) == 22:
             return _sftpClient(
                 username=self.username,
                 password=self.password,
@@ -308,7 +305,7 @@ class ConnectionClient:
             raise ValueError(f"Invalid port number {self.port}")
 
     def list_files(
-        self, time_delta: Optional[int] = None, src_file_dir: Optional[str] = None
+        self, time_delta: int = 0, src_file_dir: Optional[str] = None
     ) -> List[str]:
         """
         Lists each file in `src_file_dir` on server. If `src_file_dir` is not provided
@@ -328,26 +325,22 @@ class ConnectionClient:
         if not src_file_dir or src_file_dir is None:
             src_file_dir = self.src_dir
         with self.client as client:
-            files = client.list_file_names(src_file_dir)
-            if time_delta is not None:
-                recent_files = []
-                for file in files:
-                    file_data = self.client.get_file_data(file, src_file_dir)
-                    if (
-                        file_data.st_mtime is not None
-                        and datetime.datetime.fromtimestamp(
-                            file_data.st_mtime, tz=datetime.timezone.utc
-                        )
-                        >= today - datetime.timedelta(days=time_delta)
-                    ):
-                        recent_files.append(file)
-                return recent_files
+            files = client.list_file_data(src_file_dir)
+            if time_delta > 0:
+                return [
+                    i.file_name
+                    for i in files
+                    if datetime.datetime.fromtimestamp(
+                        i.file_mtime, tz=datetime.timezone.utc
+                    )
+                    >= today - datetime.timedelta(days=time_delta)
+                ]
             else:
-                return files
+                return [i.file_name for i in files]
 
     def get_files(
         self,
-        time_delta: Optional[int] = None,
+        time_delta: int = 0,
         src_file_dir: Optional[str] = None,
         dst_file_dir: Optional[str] = None,
     ) -> List[str]:
@@ -373,23 +366,19 @@ class ConnectionClient:
             src_file_dir = self.src_dir
         if not dst_file_dir:
             dst_file_dir = self.dst_dir
-
         with self.client as client:
-            files = client.list_file_names(src_file_dir)
-            if time_delta is not None:
-                get_files = []
-                for file in files:
-                    file_data = client.get_file_data(file, src_file_dir)
-                    if (
-                        file_data.st_mtime is not None
-                        and datetime.datetime.fromtimestamp(
-                            file_data.st_mtime, tz=datetime.timezone.utc
-                        )
-                        >= today - datetime.timedelta(days=time_delta)
-                    ):
-                        get_files.append(file)
+            files = client.list_file_data(src_file_dir)
+            if time_delta > 0:
+                get_files = [
+                    i.file_name
+                    for i in files
+                    if datetime.datetime.fromtimestamp(
+                        i.file_mtime, tz=datetime.timezone.utc
+                    )
+                    >= today - datetime.timedelta(days=time_delta)
+                ]
             else:
-                get_files = [i for i in files]
+                get_files = [i.file_name for i in files]
             for file in get_files:
                 client.retrieve_file(file=file, dst_dir=dst_file_dir)
         return get_files
