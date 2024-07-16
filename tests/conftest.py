@@ -3,22 +3,42 @@ import ftplib
 import json
 import os
 import paramiko
-from typing import List, Optional, Dict
-
+from typing import List, Dict
 import pytest
 
 
 class FakeUtcNow(datetime.datetime):
     @classmethod
     def now(cls, tzinfo=datetime.timezone.utc):
-        return cls(2024, 1, 5, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
+        return cls(2024, 1, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
 
 
-class MockFileProperties:
+class MockOsStatResults:
     """File properties for a mock file object."""
 
     def __init__(self):
         pass
+
+    @property
+    def st_size(self, *args, **kwargs):
+        return 1
+
+    @property
+    def st_uid(self, *args, **kwargs):
+        return 1
+
+    @property
+    def st_gid(self, *args, **kwargs):
+        return 1
+
+    @property
+    def st_mode(self, *args, **kwargs):
+        return 33188
+
+    @property
+    def st_atime(self, *args, **kwargs):
+        """1704070800 is equivalent to 2024-01-01 01:00:00"""
+        return 1704070800
 
     @property
     def st_mtime(self, *args, **kwargs):
@@ -26,21 +46,18 @@ class MockFileProperties:
         return 1704070800
 
 
-class MockFileError:
-    """Mock response from FTP server for a successful login"""
+@pytest.fixture
+def mock_stat_results(monkeypatch):
+    def mock_stat(*args, **kwargs):
+        return MockOsStatResults()
 
-    def __init__(self, *args, **kwargs):
-        pass
+    monkeypatch.setattr(os, "stat", mock_stat)
 
 
 @pytest.fixture
-def mock_file():
-    return MockFileProperties()
-
-
-@pytest.fixture
-def mock_file_error():
-    return MockFileError()
+def mock_file(mock_stat_results):
+    file = os.stat("foo.mrc")
+    return paramiko.SFTPAttributes.from_stat(file)
 
 
 class MockFTP:
@@ -58,26 +75,8 @@ class MockFTP:
     def login(self, *args, **kwargs) -> None:
         pass
 
-    def cwd(self, *args, **kwargs) -> None:
+    def close(self, *args, **kwargs) -> None:
         pass
-
-    def retrlines(self, *args, **kwargs) -> Optional[List]:
-        """
-        Mock response from FTP server for a successful file list request.
-        arg[0] is the command, arg[1] a callback function.
-
-        If the command is "NLST", the method returns a list of filenames. If the
-        command is "LIST", the method returns a list of file metadata.
-
-        The default callback function prints the result of the command to sys.stdout.
-        """
-        if args[0] == "NLST":
-            files = "foo.mrc"
-        elif args[0] == "LIST":
-            files = "-rw-r--r--    1 0        0          140401 Jan  1 00:01 foo.mrc"
-        else:
-            pass
-        return args[1](files)
 
     def nlst(self, *args, **kwargs) -> List[str]:
         return ["foo.mrc"]
@@ -85,7 +84,7 @@ class MockFTP:
     def retrbinary(self, *args, **kwargs) -> None:
         pass
 
-    def close(self, *args, **kwargs) -> None:
+    def storbinary(self, *args, **kwargs) -> None:
         pass
 
     def voidcmd(self, *args, **kwargs) -> str:
@@ -107,17 +106,20 @@ class MockSFTPClient:
     def chdir(self, *args, **kwargs) -> None:
         pass
 
-    def listdir(self, *args, **kwargs) -> List[str]:
-        return ["foo.mrc"]
-
-    def stat(self, *args, **kwargs) -> MockFileProperties:
-        return MockFileProperties()
+    def close(self, *args, **kwargs) -> None:
+        pass
 
     def get(self, *args, **kwargs) -> None:
         open(args[1], "x+")
 
-    def close(self, *args, **kwargs) -> None:
-        pass
+    def listdir(self, *args, **kwargs) -> List[str]:
+        return ["foo.mrc"]
+
+    def put(self, localpath: str, *args, **kwargs) -> paramiko.SFTPAttributes:
+        return paramiko.SFTPAttributes.from_stat(os.stat(localpath))
+
+    def stat(self, path: str, *args, **kwargs) -> paramiko.SFTPAttributes:
+        return paramiko.SFTPAttributes.from_stat(os.stat(path))
 
 
 class MockSSHClient:
@@ -137,20 +139,23 @@ class MockSSHClient:
 
 
 @pytest.fixture
-def stub_client(monkeypatch):
+def mock_open_file(mocker):
+    m = mocker.mock_open()
+    mocker.patch("builtins.open", m)
+    return m
+
+
+@pytest.fixture
+def stub_client(monkeypatch, mock_file):
     def mock_ftp_client(*args, **kwargs):
         return MockFTP()
 
     def mock_ssh_client(*args, **kwargs):
         return MockSSHClient()
 
-    def mock_stat(*args, **kwargs):
-        return MockFileProperties()
-
     monkeypatch.setattr(ftplib, "FTP", mock_ftp_client)
     monkeypatch.setattr(paramiko, "SSHClient", mock_ssh_client)
     monkeypatch.setattr(datetime, "datetime", FakeUtcNow)
-    monkeypatch.setattr(os, "stat", mock_stat)
 
 
 @pytest.fixture
@@ -163,15 +168,6 @@ def stub_creds() -> Dict[str, str]:
 
 
 @pytest.fixture
-def live_sftp_creds() -> Dict[str, str]:
-    cred_path = os.path.join(os.environ["USERPROFILE"], ".cred/.sftp/eastview.json")
-    cred_file = open(cred_path, "r")
-    creds = json.load(cred_file)
-    creds["vendor"] = "eastview"
-    return creds
-
-
-@pytest.fixture
 def live_ftp_creds() -> Dict[str, str]:
     cred_path = os.path.join(os.environ["USERPROFILE"], ".cred/.sftp/leila.json")
     cred_file = open(cred_path, "r")
@@ -181,10 +177,12 @@ def live_ftp_creds() -> Dict[str, str]:
 
 
 @pytest.fixture
-def mock_open_file(mocker):
-    m = mocker.mock_open()
-    mocker.patch("builtins.open", m)
-    return m
+def live_sftp_creds() -> Dict[str, str]:
+    cred_path = os.path.join(os.environ["USERPROFILE"], ".cred/.sftp/eastview.json")
+    cred_file = open(cred_path, "r")
+    creds = json.load(cred_file)
+    creds["vendor"] = "eastview"
+    return creds
 
 
 class MockOSError:
@@ -201,6 +199,21 @@ def stub_client_errors(monkeypatch, stub_client):
 
     monkeypatch.setattr(MockFTP, "nlst", mock_error)
     monkeypatch.setattr(MockFTP, "retrbinary", mock_error)
+    monkeypatch.setattr(MockFTP, "storbinary", mock_error)
+    monkeypatch.setattr(MockFTP, "voidcmd", mock_error)
     monkeypatch.setattr(MockSFTPClient, "listdir", mock_error)
-    monkeypatch.setattr(MockSFTPClient, "stat", mock_error)
     monkeypatch.setattr(MockSFTPClient, "get", mock_error)
+    monkeypatch.setattr(MockSFTPClient, "put", mock_error)
+    monkeypatch.setattr(MockSFTPClient, "stat", mock_error)
+
+
+class MockFileError:
+    """ "Mock file object for a file that raises an error"""
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+
+@pytest.fixture
+def mock_file_error():
+    return MockFileError()
