@@ -4,8 +4,9 @@ ftp or sftp client.
 """
 
 import datetime
+import os
 from typing import List, Optional, Literal
-from file_retriever._clients import _ftpClient, _sftpClient
+from file_retriever._clients import _ftpClient, _sftpClient, File
 
 
 class ConnectionClient:
@@ -64,7 +65,7 @@ class ConnectionClient:
 
     def list_files(
         self, time_delta: int = 0, src_dir: Optional[str] = None
-    ) -> List[str]:
+    ) -> List[File]:
         """
         Lists each file in `src_dir` directory on server. If `src_dir` is not provided
         then files in `self.remote_dir` will be listed. If `time_delta` is provided then
@@ -72,10 +73,10 @@ class ConnectionClient:
 
         Args:
             time_delta: number of days to go back in time to list files
-            src: directory on server to interact with
+            src_dir: directory on server to interact with
 
         Returns:
-            list of file names in `src_dir`
+            list of files in `src_dir` represented as `File` objects
         """
         today = datetime.datetime.now()
 
@@ -85,7 +86,7 @@ class ConnectionClient:
             files = client.list_file_data(src_dir)
             if time_delta > 0:
                 return [
-                    i.file_name
+                    i
                     for i in files
                     if datetime.datetime.fromtimestamp(
                         i.file_mtime, tz=datetime.timezone.utc
@@ -93,14 +94,14 @@ class ConnectionClient:
                     >= today - datetime.timedelta(days=time_delta)
                 ]
             else:
-                return [i.file_name for i in files]
+                return files
 
     def get_files(
         self,
         time_delta: int = 0,
         src_dir: Optional[str] = None,
         dst_dir: str = ".",
-    ) -> List[str]:
+    ) -> List[File]:
         """
         Downloads files from `src_dir` on server to `dst_dir`. If `src_dir` is not
         provided then files will be downloaded from `self.src_dir`. If `dst_dir` is
@@ -134,26 +135,32 @@ class ConnectionClient:
             else:
                 get_files = [i.file_name for i in files]
             for file in get_files:
-                client.download_file(file=file, file_dir=dst_dir)
-        return get_files
+                client.download_file(file=file, remote_dir=src_dir, local_dir=dst_dir)
+        return [File.from_stat_result(os.stat(i), i) for i in get_files]
 
-    def put_files(self, files: List[str], dst_dir: str) -> List[str]:
+    def put_files(
+        self,
+        files: List[str],
+        src_dir: Optional[str] = None,
+        dst_dir: Optional[str] = None,
+    ) -> List[File]:
         """
         Uploads files from local directory to server. If `dst_dir` is not
-        provided then files will be uploaded to `self.remote_dir`.
+        provided then files will be uploaded to `self.remote_dir`. If `src_dir`
+        is not provided, files will be uploaded from cwd.
 
         Args:
             files: list of files to upload
+            src_dir: local directory to upload files from
             dst_dir: remote directory to upload files to
 
         Returns:
             list of files uploaded to `dst_dir`
         """
-        uploaded_files = []
-        if not dst_dir:
+        if dst_dir is None:
             dst_dir = self.remote_dir
         with self.client as client:
             for file in files:
-                uploaded_file = client.upload_file(file=file, file_dir=dst_dir)
-                uploaded_files.append(uploaded_file.file_name)
-        return uploaded_files
+                client.upload_file(file=file, remote_dir=dst_dir, local_dir=src_dir)
+            uploaded_files = client.list_file_data(src_dir)
+            return uploaded_files

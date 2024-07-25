@@ -122,3 +122,4 @@ envar*.yaml
 config.yaml
 creds.yaml
 temp/*
+*.mrc
