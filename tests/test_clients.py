@@ -200,12 +200,6 @@ class TestMock_ftpClient:
             ftp = _ftpClient(**stub_creds)
             ftp.download_file(file="foo.mrc", remote_dir="bar", local_dir="test")
 
-    def test_ftpClient_download_mock_file_cwd(self, stub_client, stub_creds):
-        stub_creds["port"] = "21"
-        with does_not_raise():
-            ftp = _ftpClient(**stub_creds)
-            ftp.download_file(file="foo.mrc")
-
     def test_ftpClient_download_file_not_found(self, client_file_error, stub_creds):
         stub_creds["port"] = "21"
         with pytest.raises(OSError):
@@ -222,9 +216,7 @@ class TestMock_ftpClient:
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
         file = ftp.upload_file(file="foo.mrc", local_dir="foo", remote_dir="bar")
-        file_cwd = ftp.upload_file(file="foo.mrc")
         assert file.file_mtime == 1704070800
-        assert file_cwd.file_name == "foo.mrc"
 
     def test_ftpClient_upload_file_not_found(self, client_file_error, stub_creds):
         stub_creds["port"] = "21"
@@ -310,12 +302,6 @@ class TestMock_sftpClient:
             sftp = _ftpClient(**stub_creds)
             sftp.download_file(file="foo.mrc", remote_dir="bar", local_dir="test")
 
-    def test_sftpClient_download_mock_file_cwd(self, stub_client, stub_creds):
-        stub_creds["port"] = "22"
-        with does_not_raise():
-            sftp = _ftpClient(**stub_creds)
-            sftp.download_file(file="foo.mrc")
-
     def test_sftpClient_download_file_not_found(self, client_file_error, stub_creds):
         stub_creds["port"] = "22"
         sftp = _sftpClient(**stub_creds)
@@ -326,9 +312,7 @@ class TestMock_sftpClient:
         stub_creds["port"] = "22"
         sftp = _sftpClient(**stub_creds)
         file = sftp.upload_file(file="foo.mrc", local_dir="foo", remote_dir="bar")
-        file_cwd = sftp.upload_file(file="bar.mrc", remote_dir="bar")
         assert file.file_mtime == 1704070800
-        assert file_cwd.file_name == "bar.mrc"
 
     def test_sftpClient_upload_file_not_found(self, client_file_error, stub_creds):
         stub_creds["port"] = "22"

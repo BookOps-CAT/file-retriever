@@ -271,9 +271,7 @@ class _sftpClient:
         except OSError:
             raise
 
-    def download_file(
-        self, file: str, remote_dir: str = ".", local_dir: str = "."
-    ) -> None:
+    def download_file(self, file: str, remote_dir: str, local_dir: str) -> None:
         """
         Downloads file from `remote_dir` on server to `local_dir`.
 
@@ -281,9 +279,9 @@ class _sftpClient:
             file:
                 name of file to upload
             remote_dir:
-                remote directory to download file from, default is '.'
+                remote directory to download file from
             local_dir:
-                local directory to download file to, default is '.'
+                local directory to download file to
 
         Returns:
             None
@@ -298,9 +296,7 @@ class _sftpClient:
         except OSError:
             raise
 
-    def upload_file(
-        self, file: str, remote_dir: str = ".", local_dir: str = "."
-    ) -> File:
+    def upload_file(self, file: str, remote_dir: str, local_dir: str) -> File:
         """
         Upload file from `local_dir` to `remote_dir` on server.
 
@@ -308,9 +304,9 @@ class _sftpClient:
             file:
                 name of file to upload
             remote_dir:
-                remote directory to upload file to, default is '.'
+                remote directory to upload file to
             local_dir:
-                local directory to upload file from, default is '.'
+                local directory to upload file from
 
         Returns:
             uploaded file as `File` object

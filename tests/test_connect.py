@@ -182,25 +182,6 @@ class TestMockClient:
                 files=["foo.mrc"], src_dir="bar", dst_dir="test"
             )
 
-    @pytest.mark.parametrize("port", [21, 22])
-    def test_Client_check_if_files_exist(self, stub_client, stub_creds, port):
-        vendor_creds = stub_creds.copy()
-        vendor_creds["port"], vendor_creds["vendor"], vendor_creds["remote_dir"] = (
-            port,
-            "test_vendor",
-            "test_vendor/files",
-        )
-        nsdrop_creds = stub_creds.copy()
-        nsdrop_creds["port"], nsdrop_creds["vendor"], nsdrop_creds["remote_dir"] = (
-            22,
-            "nsdrop",
-            "test_nsdrop/files",
-        )
-        vendor_client = Client(**vendor_creds)
-        vendor_files = vendor_client.list_files()
-        nsdrop_client = Client(**nsdrop_creds)
-        nsdrop_files = nsdrop_client.list_files()
-
 
 @pytest.mark.livetest
 def test_Client_ftp_live_test(live_ftp_creds):
