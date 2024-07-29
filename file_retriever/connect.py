@@ -1,231 +1,19 @@
-"""This module contains classes for interacting with remote storage.
-
-Can be used to connect to vendor servers or internal network drives
-to interact with files and directories.
+"""Public class for interacting with remote storage. Can be used for to create
+ftp or sftp client.
 
 """
 
 import datetime
-import ftplib
 import os
-import paramiko
-from typing import List, Optional
+from typing import List, Optional, Literal, Union
+from file_retriever._clients import _ftpClient, _sftpClient, File
 
 
-class _sftpClient:
-    """
-    An SFTP client to use when interacting with remote storage. Supports
-    interactions with servers via the `paramiko library.
-    """
-
-    def __init__(
-        self,
-        vendor: str,
-        username: str,
-        password: str,
-        host: str,
-        port: str | int,
-        src_dir: str,
-    ):
-        """Initializes client instance.
-
-        Args:
-            vendor: name of vendor
-            username: username for server
-            password: password for server
-            host: server address
-            port: port number for server
-            src_dir: directory on server to interact with
-
-        """
-        self.vendor = vendor
-        self.username = username
-        self.password = password
-        self.host = host
-        self.port = int(port)
-        self.src_dir = src_dir
-        self.connection = self._create_sftp_connection()
-
-    def __enter__(self, *args):
-        """
-        Allows for use of context manager with the `_sftpClient` class.
-
-        Opens context manager.
-        """
-        return self
-
-    def __exit__(self, *args):
-        """
-        Allows for use of context manager with the `_sftpClient` class.
-
-        Closes context manager.
-        """
-        self.connection.close()
-
-    def _create_sftp_connection(self) -> paramiko.SFTPClient:
-        """
-        Opens connection to server via SFTP.
-
-        Returns:
-            `paramiko.SFTPClient` object
-
-        """
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(
-            hostname=self.host,
-            port=self.port,
-            username=self.username,
-            password=self.password,
-        )
-        sftp_client = ssh.open_sftp()
-        return sftp_client
-
-    def list_file_names(self) -> List[str]:
-        """Lists each file in `src_dir` on server."""
-        files = self.connection.listdir(self.src_dir)
-        return files
-
-    def get_file_data(self, file: str) -> paramiko.SFTPAttributes:
-        """
-        Gets metadata for single file on server in `src_dir`. Attributes
-        of returned object are similar to `os.stat_result`.
-
-        Args:
-            file: name of file to get metadata for.
-
-        Returns:
-            `paramiko.SFTPAttributes` object
-        """
-        file_data = self.connection.stat(f"{self.src_dir}/{file}")
-        return file_data
-
-    def retrieve_file(self, file: str, dst_dir: str) -> None:
-        """
-        Downloads file from server to `dst_dir`.
-
-        Args:
-            files: file to download
-            dst_dir: directory to download file to
-        """
-        with self.connection as client:
-            try:
-                client.get(file, f"{dst_dir}/{file}")
-            except OSError:
-                raise
-
-
-class _ftpClient:
-    """
-    An FTP client to use when interacting with remote storage. Supports
-    interactions with servers via the `ftplib` library.
-    """
-
-    def __init__(
-        self,
-        vendor: str,
-        username: str,
-        password: str,
-        host: str,
-        port: str | int,
-        src_dir: str,
-    ):
-        """Initializes client instance.
-
-        Args:
-            vendor: name of vendor
-            username: username for server
-            password: password for server
-            host: server address
-            port: port number for server
-            src_dir: directory on server to interact with
-
-        """
-        self.vendor = vendor
-        self.username = username
-        self.password = password
-        self.host = host
-        self.port = int(port)
-        self.src_dir = src_dir
-
-        self.connection = self._create_ftp_connection()
-
-    def __enter__(self, *args):
-        """
-        Allows for use of context manager with the `_ftpClient` class.
-
-        Opens context manager.
-        """
-        return self
-
-    def __exit__(self, *args):
-        """
-        Allows for use of context manager with the `_ftpClient` class.
-
-        Closes context manager.
-        """
-        self.connection.close()
-
-    def _create_ftp_connection(self) -> ftplib.FTP:
-        """
-        Opens connection to server via FTP.
-
-        Returns:
-            `ftplib.FTP` object
-
-        """
-        ftp_client = ftplib.FTP(
-            host=self.host,
-        )
-        ftp_client.encoding = "utf-8"
-        ftp_client.login(
-            user=self.username,
-            passwd=self.password,
-        )
-        return ftp_client
-
-    def list_file_names(self) -> List[str]:
-        """Lists each file in `src_dir` on server."""
-        files: list = []
-        self.connection.cwd(self.src_dir)
-        self.connection.retrlines("NLST", files.append)
-        return files
-
-    def get_file_data(self, filename: str) -> os.stat_result:
-        """
-        Gets metadata for single file on server in `src_dir`.
-
-        Args:
-            file: name of file to get metadata for.
-
-        Returns:
-            `os.stat_result`
-        """
-        self.connection.cwd(self.src_dir)
-        file_data = os.stat(filename)
-        return file_data
-
-    def retrieve_file(self, file: str, dst_dir: str) -> None:
-        """
-        Downloads file from server to `dst_dir`.
-
-        Args:
-            file: file to download
-            dst_dir: directory to download file to
-        """
-        with self.connection as client:
-            try:
-                with open(f"{dst_dir}/{file}", "wb") as f:
-                    client.retrbinary(f"RETR {file}", f.write)
-            except OSError:
-                raise
-
-
-class ConnectionClient:
+class Client:
     """
     A wrapper class to use when interacting with remote storage. Creates
-    client to interact with server via `_ftpClient` or `_sftpClient` depending
-    on port specified in credentials.
+    client to interact with server via `_ftpClient` or `_sftpClient` object
+    depending on port specified in credentials.
     """
 
     def __init__(
@@ -234,9 +22,8 @@ class ConnectionClient:
         username: str,
         password: str,
         host: str,
-        port: str | int,
-        src_dir: str,
-        dst_dir: str,
+        port: Literal[21, 22, "21", "22"],
+        remote_dir: str,
     ):
         """Initializes client instance.
 
@@ -246,109 +33,135 @@ class ConnectionClient:
             password: password for server
             host: server address
             port: port number for server
-            src_dir: directory on server to interact with
-            dst_dir: directory to download files to
+            remote_dir: directory on server to interact with
         """
 
         self.vendor = vendor
-        self.username = username
-        self.password = password
         self.host = host
         self.port = int(port)
-        self.src_dir = src_dir
-        self.dst_dir = dst_dir
+        self.remote_dir = remote_dir
 
-        self.client = self._create_client()
+        self.session = self._create_client(username=username, password=password)
 
-    def _create_client(self) -> _ftpClient | _sftpClient:
-        if self.port == 21:
-            return _ftpClient(
-                vendor=self.vendor,
-                username=self.username,
-                password=self.password,
-                host=self.host,
-                port=self.port,
-                src_dir=self.src_dir,
-            )
-        elif self.port == 22:
-            return _sftpClient(
-                vendor=self.vendor,
-                username=self.username,
-                password=self.password,
-                host=self.host,
-                port=self.port,
-                src_dir=self.src_dir,
-            )
-        else:
-            raise ValueError(f"Invalid port number {self.port}")
+    def _create_client(
+        self, username: str, password: str
+    ) -> Union[_ftpClient, _sftpClient]:
+        match self.port:
+            case 21:
+                return _ftpClient(
+                    username=username,
+                    password=password,
+                    host=self.host,
+                    port=self.port,
+                )
+            case 22:
+                return _sftpClient(
+                    username=username,
+                    password=password,
+                    host=self.host,
+                    port=self.port,
+                )
+            case _:
+                raise ValueError(f"Invalid port number: {self.port}")
 
-    def list_files(self, time_delta: Optional[int] = None) -> List[str]:
+    def list_files(
+        self, time_delta: int = 0, src_dir: Optional[str] = None
+    ) -> List[File]:
         """
-        Lists each file in `src_dir` on server. If `time_delta` is provided
-        then files created in the last x days will be listed where x is
-        the `time_delta`.
+        Lists each file in `src_dir` directory on server. If `src_dir` is not provided
+        then files in `self.remote_dir` will be listed. If `time_delta` is provided then
+        files created in the last x days will be listed where x is the `time_delta`.
 
         Args:
             time_delta: number of days to go back in time to list files
+            src_dir: directory on server to interact with
 
         Returns:
-            list of files
+            list of files in `src_dir` represented as `File` objects
         """
         today = datetime.datetime.now()
 
-        with self.client as client:
-            files = client.list_file_names()
-            if time_delta is not None:
-                recent_files = []
-                for file in files:
-                    file_data = self.client.get_file_data(file)
-                    if (
-                        file_data.st_mtime is not None
-                        and datetime.datetime.fromtimestamp(
-                            file_data.st_mtime, tz=datetime.timezone.utc
-                        )
-                        >= today - datetime.timedelta(days=time_delta)
-                    ):
-                        recent_files.append(file)
-                return recent_files
+        if not src_dir or src_dir is None:
+            src_dir = self.remote_dir
+        with self.session as session:
+            files = session.list_file_data(src_dir)
+            if time_delta > 0:
+                return [
+                    i
+                    for i in files
+                    if datetime.datetime.fromtimestamp(
+                        i.file_mtime, tz=datetime.timezone.utc
+                    )
+                    >= today - datetime.timedelta(days=time_delta)
+                ]
             else:
                 return files
 
     def get_files(
-        self, time_delta: Optional[int] = None, file_dir: Optional[str] = None
-    ) -> List[str]:
+        self,
+        time_delta: int = 0,
+        src_dir: Optional[str] = None,
+        dst_dir: str = ".",
+    ) -> List[File]:
         """
-        Downloads files from server to `file_dir`. If `file_dir` is not provided
-        then files will be downloaded `dst_dir`. If `time_delta` is provided
-        then files created in the last x days will be downloaded where x is
-        the `time_delta`.
+        Downloads files from `src_dir` on server to `dst_dir`. If `src_dir` is not
+        provided then files will be downloaded from `self.src_dir`. If `dst_dir` is
+        not provided then files will be downloaded to cwd. If `time_delta` is provided
+        then files created in the last x days will be downloaded where x is the
+        `time_delta`.
 
         Args:
             time_delta: number of days to go back in time to list files
-            file_dir: directory to download files to
+            src_dir: directory on server to download files from
+            dst_dir: local directory to download files to
 
         Returns:
-            list of files downloaded to `file_dir`
+            list of files downloaded to `dst_dir`
         """
         today = datetime.datetime.now()
-        if not file_dir:
-            file_dir = self.dst_dir
-        with self.client as client:
-            files = client.list_file_names()
-            if time_delta is not None:
-                get_files = []
-                for file in files:
-                    file_data = client.get_file_data(file)
-                    if (
-                        file_data.st_mtime is not None
-                        and datetime.datetime.fromtimestamp(
-                            file_data.st_mtime, tz=datetime.timezone.utc
-                        )
-                        >= today - datetime.timedelta(days=time_delta)
-                    ):
-                        get_files.append(file)
+
+        if not src_dir or src_dir is None:
+            src_dir = self.remote_dir
+        with self.session as session:
+            files = session.list_file_data(src_dir)
+            if time_delta > 0:
+                get_files = [
+                    i.file_name
+                    for i in files
+                    if datetime.datetime.fromtimestamp(
+                        i.file_mtime, tz=datetime.timezone.utc
+                    )
+                    >= today - datetime.timedelta(days=time_delta)
+                ]
             else:
-                get_files = [i for i in files]
+                get_files = [i.file_name for i in files]
             for file in get_files:
-                client.retrieve_file(file=file, dst_dir=file_dir)
-        return get_files
+                session.download_file(file=file, remote_dir=src_dir, local_dir=dst_dir)
+        return [File.from_stat_result(os.stat(i), i) for i in get_files]
+
+    def put_files(
+        self,
+        files: List[str],
+        src_dir: Optional[str] = None,
+        dst_dir: Optional[str] = None,
+    ) -> List[File]:
+        """
+        Uploads files from local directory to server. If `dst_dir` is not
+        provided then files will be uploaded to `self.remote_dir`. If `src_dir`
+        is not provided, files will be uploaded from cwd.
+
+        Args:
+            files: list of files to upload
+            src_dir: local directory to upload files from
+            dst_dir: remote directory to upload files to
+
+        Returns:
+            list of files uploaded to `dst_dir`
+        """
+        if dst_dir is None:
+            dst_dir = self.remote_dir
+        with self.session as session:
+            for file in files:
+                session.upload_file(file=file, remote_dir=dst_dir, local_dir=src_dir)
+            uploaded_files = session.list_file_data(src_dir)
+            return uploaded_files

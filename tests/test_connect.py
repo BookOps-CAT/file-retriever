@@ -1,180 +1,199 @@
-import os
+import ftplib
+import paramiko
 import pytest
-from file_retriever.connect import ConnectionClient, _ftpClient, _sftpClient
+from file_retriever.connect import Client, _ftpClient, _sftpClient, File
 
 
-def test_ftpClient(stub_client, stub_creds):
-    stub_creds["port"] = "21"
-    ftp = _ftpClient(**stub_creds)
-    assert ftp.vendor == "test"
-    assert ftp.host == "ftp.testvendor.com"
-    assert ftp.username == "test_username"
-    assert ftp.password == "test_password"
-    assert ftp.port == 21
-    assert ftp.src_dir == "testdir"
-    assert ftp.connection is not None
+class TestMockClient:
+    """Test Client with mock responses."""
 
-
-def test_sftpClient(stub_client, stub_creds):
-    stub_creds["port"] = "22"
-    sftp = _sftpClient(**stub_creds)
-    assert sftp.vendor == "test"
-    assert sftp.host == "ftp.testvendor.com"
-    assert sftp.username == "test_username"
-    assert sftp.password == "test_password"
-    assert sftp.port == 22
-    assert sftp.src_dir == "testdir"
-    assert sftp.connection is not None
-
-
-def test_ftpClient_list_file_names(stub_client, stub_creds):
-    stub_creds["port"] = "21"
-    ftp = _ftpClient(**stub_creds)
-    files = ftp.list_file_names()
-    assert files == ["foo.mrc"]
-
-
-def test_sftpClient_list_file_names(stub_client, stub_creds):
-    stub_creds["port"] = "22"
-    sftp = _sftpClient(**stub_creds)
-    files = sftp.list_file_names()
-    assert files == ["foo.mrc"]
-
-
-def test_ftpClient_get_file_data(stub_client, stub_creds):
-    stub_creds["port"] = "21"
-    ftp = _ftpClient(**stub_creds)
-    file_data = ftp.get_file_data("foo.mrc")
-    assert file_data.st_size == 140401
-    assert file_data.st_mode == 33261
-    assert file_data.st_atime == 1704132000
-    assert file_data.st_mtime == 1704132000
-
-
-def test_sftpClient_get_file_data(stub_client, stub_creds):
-    stub_creds["port"] = "22"
-    sftp = _sftpClient(**stub_creds)
-    file_data = sftp.get_file_data("foo.mrc")
-    assert file_data.st_size == 140401
-    assert file_data.st_mode == 33261
-    assert file_data.st_atime == 1704132000
-    assert file_data.st_mtime == 1704132000
-
-
-@pytest.mark.tmpdir
-def test_ftpClient_retrieve_file(tmp_path, stub_client, stub_creds):
-    stub_creds["port"] = "21"
-    path = tmp_path / "test"
-    path.mkdir()
-    ftp = _ftpClient(**stub_creds)
-    ftp.retrieve_file(file="foo.mrc", dst_dir=str(path))
-    assert "foo.mrc" in os.listdir(path)
-
-
-@pytest.mark.tmpdir
-def test_sftpClient_retrieve_file(tmp_path, stub_client, stub_creds):
-    stub_creds["port"] = "22"
-    path = tmp_path / "test"
-    path.mkdir()
-    sftp = _ftpClient(**stub_creds)
-    sftp.retrieve_file(file="foo.mrc", dst_dir=str(path))
-    assert "foo.mrc" in os.listdir(path)
-
-
-@pytest.mark.parametrize(
-    "port, client_type",
-    [
+    @pytest.mark.parametrize(
+        "port, client_type",
+        [
+            (
+                21,
+                _ftpClient,
+            ),
+            (
+                22,
+                _sftpClient,
+            ),
+        ],
+    )
+    def test_Client(self, stub_client, stub_creds, port, client_type):
         (
-            21,
-            _ftpClient,
-        ),
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (port, "testdir", "test")
+        connect = Client(**stub_creds)
+        assert connect.vendor == "test"
+        assert connect.host == "ftp.testvendor.com"
+        assert connect.port == port
+        assert connect.remote_dir == "testdir"
+        assert isinstance(connect.session, client_type)
+
+    def test_Client_invalid_port(self, stub_client, stub_creds):
         (
-            22,
-            _sftpClient,
-        ),
-    ],
-)
-def test_ConnectionClient(stub_client, stub_creds, port, client_type):
-    stub_creds["port"] = port
-    stub_creds["dst_dir"] = "NSDROP/vendor_loads/test"
-    connect = ConnectionClient(**stub_creds)
-    assert connect.vendor == "test"
-    assert connect.username == "test_username"
-    assert connect.host == "ftp.testvendor.com"
-    assert connect.port == port
-    assert connect.src_dir == "testdir"
-    assert connect.dst_dir == f"NSDROP/vendor_loads/{connect.vendor.lower()}"
-    assert isinstance(connect.client, client_type)
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (1, "testdir", "test")
+        with pytest.raises(ValueError) as e:
+            Client(**stub_creds)
+        assert f"Invalid port number: {stub_creds['port']}" in str(e)
 
+    def test_Client_ftp_auth_error(self, client_auth_error, stub_creds):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (21, "testdir", "test")
+        with pytest.raises(ftplib.error_perm):
+            Client(**stub_creds)
 
-def test_ConnectionClient_invalid_creds(stub_client, stub_creds):
-    stub_creds["port"] = "1"
-    stub_creds["dst_dir"] = "NSDROP/vendor_loads/test"
-    with pytest.raises(ValueError) as e:
-        ConnectionClient(**stub_creds)
-    assert f"Invalid port number {stub_creds['port']}" in str(e)
+    def test_Client_sftp_auth_error(self, client_auth_error, stub_creds):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (22, "testdir", "test")
+        with pytest.raises(paramiko.AuthenticationException):
+            Client(**stub_creds)
 
+    @pytest.mark.parametrize("port", [21, 22])
+    def test_Client_list_files(self, stub_client, stub_creds, port):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (port, "testdir", "test")
+        connect = Client(**stub_creds)
+        all_files = connect.list_files()
+        recent_files = connect.list_files(time_delta=5, src_dir="testdir")
+        assert all_files == [
+            File(
+                file_name="foo.mrc",
+                file_mtime=1704070800,
+                file_size=140401,
+                file_mode=33188,
+                file_uid=0,
+                file_gid=0,
+                file_atime=None,
+            )
+        ]
+        assert recent_files == []
 
-@pytest.mark.parametrize(
-    "time_delta, file_list, port",
-    [
-        (None, ["foo.mrc"], 21),
-        (1, [], 22),
-        (2, [], 22),
-        (20, ["foo.mrc"], 21),
-    ],
-)
-def test_ConnectionClient_list_files(
-    stub_client, stub_creds, time_delta, file_list, port
-):
-    stub_creds["port"] = port
-    stub_creds["dst_dir"] = "NSDROP/vendor_loads/test"
-    connect = ConnectionClient(**stub_creds)
-    files = connect.list_files(time_delta)
-    assert files == file_list
+    def test_Client_list_ftp_file_not_found(self, client_error_reply, stub_creds):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (21, "testdir", "test")
+        with pytest.raises(ftplib.error_reply):
+            Client(**stub_creds).list_files()
 
+    def test_Client_list_sftp_file_not_found(self, client_file_error, stub_creds):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (22, "testdir", "test")
+        with pytest.raises(OSError):
+            Client(**stub_creds).list_files()
 
-@pytest.mark.parametrize("port", [21, 22])
-def test_ConnectionClient_get_files(stub_client, mock_open_file, stub_creds, port):
-    stub_creds["port"] = port
-    stub_creds["dst_dir"] = "NSDROP/vendor_loads/test"
-    connect = ConnectionClient(**stub_creds)
-    files = connect.get_files()
-    file_count = len(files)
-    assert file_count == 1
-    assert files == ["foo.mrc"]
+    @pytest.mark.parametrize("port", [21, 22])
+    def test_Client_get_files(self, stub_client, stub_creds, port):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (port, "testdir", "test")
+        connect = Client(**stub_creds)
+        all_files = connect.get_files()
+        recent_files = connect.get_files(time_delta=5, src_dir="testdir")
+        assert all_files == [
+            File(
+                file_name="foo.mrc",
+                file_mtime=1704070800,
+                file_size=140401,
+                file_mode=33188,
+                file_uid=0,
+                file_gid=0,
+                file_atime=None,
+            )
+        ]
+        assert recent_files == []
 
+    @pytest.mark.parametrize("port", [21, 22])
+    def test_Client_get_file_not_found(self, client_file_error, stub_creds, port):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (port, "testdir", "test")
+        connect = Client(**stub_creds)
+        with pytest.raises(OSError):
+            connect.get_files()
 
-@pytest.mark.parametrize("port", [21, 22])
-def test_ConnectionClient_get_files_with_time_delta(
-    stub_client, stub_creds, mock_open_file, port
-):
-    stub_creds["port"] = port
-    stub_creds["dst_dir"] = "NSDROP/vendor_loads/test"
-    connect = ConnectionClient(**stub_creds)
-    new_files = connect.get_files(time_delta=1, file_dir=stub_creds["dst_dir"])
-    new_files_count = len(new_files)
-    old_files = connect.get_files(time_delta=10)
-    old_files_count = len(old_files)
-    assert new_files_count == 0
-    assert old_files_count == 1
-    assert new_files == []
-    assert old_files == ["foo.mrc"]
+    @pytest.mark.parametrize(
+        "port, file_dir", [(21, None), (21, "test"), (22, None), (22, "test")]
+    )
+    def test_Client_put_files(self, stub_client, stub_creds, port, file_dir):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (port, "foo", "test")
+        connect = Client(**stub_creds)
+        files = connect.put_files(files=["foo.mrc"], src_dir="bar", dst_dir=file_dir)
+        assert files == [
+            File(
+                file_name="foo.mrc",
+                file_mtime=1704070800,
+                file_size=140401,
+                file_mode=33188,
+                file_uid=0,
+                file_gid=0,
+                file_atime=None,
+            )
+        ]
 
+    @pytest.mark.parametrize("port", [21, 22])
+    def test_Client_put_file_not_found(self, client_file_error, stub_creds, port):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (port, "testdir", "test")
+        with pytest.raises(OSError):
+            Client(**stub_creds).put_files(
+                files=["foo.mrc"], src_dir="bar", dst_dir="test"
+            )
 
-@pytest.mark.parametrize("port, client_type", [(21, _ftpClient), (22, _sftpClient)])
-def test_ConnectionClient_get_files_OSError(stub_client, stub_creds, port, client_type):
-    stub_creds["port"] = port
-    stub_creds["dst_dir"] = "NSDROP/vendor_loads/test"
-    connect = ConnectionClient(**stub_creds)
-    with pytest.raises(OSError):
-        connect.get_files()
-    assert isinstance(connect.client, client_type)
+    def test_Client_put_client_error_reply(self, client_error_reply, stub_creds):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (21, "testdir", "test")
+        with pytest.raises(ftplib.error_reply):
+            Client(**stub_creds).put_files(
+                files=["foo.mrc"], src_dir="bar", dst_dir="test"
+            )
 
 
 @pytest.mark.livetest
-def test_ConnectionClient_live_test(live_ftp_creds, live_sftp_creds):
-    live_ftp = ConnectionClient(**live_ftp_creds)
-    live_sftp = ConnectionClient(**live_sftp_creds)
-    assert "220" in live_ftp.client.connection.getwelcome()
-    assert live_sftp.client.connection.get_channel().active == 1
+def test_Client_ftp_live_test(live_ftp_creds):
+    live_ftp = Client(**live_ftp_creds)
+    files = live_ftp.list_files()
+    assert len(files) > 1
+    assert "220" in live_ftp.session.connection.getwelcome()
+
+
+@pytest.mark.livetest
+def test_Client_sftp_live_test(live_sftp_creds):
+    live_sftp = Client(**live_sftp_creds)
+    files = live_sftp.list_files()
+    assert len(files) > 1
+    assert live_sftp.session.connection.get_channel().active == 1
