@@ -20,14 +20,14 @@ def test_File_from_SFTPAttributes(mock_sftp_attr):
     foo_attr = paramiko.SFTPAttributes.from_stat(
         obj=os.stat("foo.mrc"), filename="foo.mrc"
     )
-    foo = File.from_SFTPAttributes(file_data=foo_attr)
+    foo = File.from_SFTPAttributes(file_attr=foo_attr)
     bar_attr = paramiko.SFTPAttributes.from_stat(obj=os.stat("bar.mrc"))
-    bar = File.from_SFTPAttributes(file_data=bar_attr, file_name="bar.mrc")
+    bar = File.from_SFTPAttributes(file_attr=bar_attr, file_name="bar.mrc")
     baz_attr = paramiko.SFTPAttributes.from_stat(obj=os.stat("baz.mrc"))
     baz_attr.longname = (
         "-rw-r--r--    1 0        0          140401 Jan  1 00:01 baz.mrc"
     )
-    baz = File.from_SFTPAttributes(file_data=baz_attr)
+    baz = File.from_SFTPAttributes(file_attr=baz_attr)
     assert isinstance(foo_attr, paramiko.SFTPAttributes)
     assert foo.file_name == "foo.mrc"
     assert foo.file_mtime == 1704070800
@@ -42,7 +42,7 @@ def test_File_from_SFTPAttributes(mock_sftp_attr):
 def test_File_from_SFTPAttributes_no_filename(mock_sftp_attr):
     sftp_attr = paramiko.SFTPAttributes.from_stat(obj=os.stat("foo.mrc"))
     with pytest.raises(AttributeError) as exc:
-        File.from_SFTPAttributes(file_data=sftp_attr)
+        File.from_SFTPAttributes(file_attr=sftp_attr)
     assert "No filename provided" in str(exc)
 
 
@@ -52,7 +52,7 @@ def test_File_from_SFTPAttributes_no_st_mtime(mock_sftp_attr):
     )
     delattr(sftp_attr, "st_mtime")
     with pytest.raises(AttributeError) as exc:
-        File.from_SFTPAttributes(file_data=sftp_attr)
+        File.from_SFTPAttributes(file_attr=sftp_attr)
     assert "No file modification time provided" in str(exc)
 
 
@@ -62,7 +62,7 @@ def test_File_from_SFTPAttributes_None_st_mtime(mock_sftp_attr):
     )
     sftp_attr.st_mtime = None
     with pytest.raises(AttributeError) as exc:
-        File.from_SFTPAttributes(file_data=sftp_attr)
+        File.from_SFTPAttributes(file_attr=sftp_attr)
     assert "No file modification time provided" in str(exc)
 
 
@@ -94,7 +94,7 @@ def test_File_from_ftp_response(data, time_str, mtime, mode):
     server = "vsFTPd 3.0.5"
     time = time_str
     file = File.from_ftp_response(
-        file_data=file_data, server_type=server, voidcmd_mtime=time
+        retr_data=file_data, server_type=server, voidcmd_mtime=time
     )
     assert file.file_name == "foo.mrc"
     assert file.file_mtime == mtime
@@ -111,7 +111,7 @@ def test_File_from_ftp_response_other_server():
     time = "220 20240101010000"
     with pytest.raises(ValueError) as exc:
         File.from_ftp_response(
-            file_data=file_data, server_type=server, voidcmd_mtime=time
+            retr_data=file_data, server_type=server, voidcmd_mtime=time
         )
         assert "Server type not recognized." in str(exc)
 
@@ -133,19 +133,11 @@ class TestMock_ftpClient:
     def test_ftpClient(self, stub_client, stub_creds):
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
-        assert ftp.host == "ftp.testvendor.com"
-        assert ftp.username == "test_username"
-        assert ftp.password == "test_password"
-        assert ftp.port == 21
         assert ftp.connection is not None
 
     def test_ftpClient_context_manager(self, stub_client, stub_creds):
         stub_creds["port"] = "21"
         with _ftpClient(**stub_creds) as client:
-            assert client.host == "ftp.testvendor.com"
-            assert client.username == "test_username"
-            assert client.password == "test_password"
-            assert client.port == 21
             assert client.connection is not None
 
     @pytest.mark.parametrize("port", [None, [], {}])
@@ -253,10 +245,6 @@ class TestMock_sftpClient:
     def test_sftpClient(self, stub_client, stub_creds):
         stub_creds["port"] = "22"
         sftp = _sftpClient(**stub_creds)
-        assert sftp.host == "ftp.testvendor.com"
-        assert sftp.username == "test_username"
-        assert sftp.password == "test_password"
-        assert sftp.port == 22
         assert sftp.connection is not None
 
     @pytest.mark.parametrize("port", [None, [], {}])
@@ -283,10 +271,6 @@ class TestMock_sftpClient:
     def test_sftpClient_context_manager(self, stub_client, stub_creds):
         stub_creds["port"] = "22"
         with _sftpClient(**stub_creds) as client:
-            assert client.host == "ftp.testvendor.com"
-            assert client.username == "test_username"
-            assert client.password == "test_password"
-            assert client.port == 22
             assert client.connection is not None
 
     def test_sftpClient_list_file_data(self, stub_client, stub_creds):

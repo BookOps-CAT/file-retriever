@@ -5,172 +5,12 @@ Can be used to connect to vendor servers or internal network drives.
 
 """
 
-from dataclasses import dataclass
-import datetime
 import ftplib
 import os
 import paramiko
-from typing import List, Optional
+from typing import List, Union
 
-
-@dataclass
-class File:
-    file_name: str
-    file_mtime: float
-    file_size: Optional[int] = None
-    file_uid: Optional[int] = None
-    file_gid: Optional[int] = None
-    file_atime: Optional[float] = None
-    file_mode: Optional[int] = None
-
-    @classmethod
-    def from_SFTPAttributes(
-        cls, file_data: paramiko.SFTPAttributes, file_name: Optional[str] = None
-    ) -> "File":
-        """
-        Parses data from `paramiko.SFTPAttributes` object to create `File` object.
-        Accepts data returned by `paramiko.SFTPClient.stat`, `paramiko.SFTPClient.put`
-        or `paramiko.SFTPClient.listdir_attr` methods.
-
-        Args:
-            file_data:
-                data returned by `paramiko.SFTPAttributes` object
-            file_name:
-                name of file, default is None
-
-        Returns:
-            `File` object
-
-        Raises:
-            AttributeError:
-                if no filename is provided or if no file modification time is provided
-        """
-        if hasattr(file_data, "filename"):
-            pass
-        elif hasattr(file_data, "longname"):
-            file_data.filename = file_data.longname[56:]
-        elif file_name is not None:
-            file_data.filename = file_name
-        else:
-            raise AttributeError("No filename provided")
-
-        if not hasattr(file_data, "st_mtime") or file_data.st_mtime is None:
-            raise AttributeError("No file modification time provided")
-
-        else:
-            return cls(
-                file_data.filename,
-                file_data.st_mtime,
-                file_data.st_size,
-                file_data.st_uid,
-                file_data.st_gid,
-                file_data.st_atime,
-                file_data.st_mode,
-            )
-
-    @classmethod
-    def from_ftp_response(
-        cls, file_data: str, server_type: str, voidcmd_mtime: str
-    ) -> "File":
-        """
-        Parses data returned by commands to create `File` object. Data from
-        file_data arg is parsed to extract file_name, size, uid, gid, and
-        file_mode. Data voidcmd_mtime is parsed into a timestamp to identify
-        file modification date.FTP clients return data in slightly different
-        formats depending on the type of server used and this class method
-        is meant to be extensible to handle new server types as they are
-        encountered. Currently only supports vsFTPd 3.0.5.
-
-        file_data from vsFTPd 3.0.5:
-            file_name: characters 56 to end of the file_data string.
-            size: characters 36 to 42 of the file_data string.
-            uid: character 16 of the file_data string.
-            gid: character 25 of the file_data string.
-            file_mode: parsed from characters 0 to 10 of the file_data string
-            and converted to decimal notation. Converts digit 1 (filetype), digits
-            2-4 (owner permissions), digits 5-7 (group permissions), and digits
-            8-10 (other permissions) to octal value (eg: '-rwxrwxrwx' -> 100777)
-            and then calculates decimal value of octal number.
-                decimal value formula:
-                    (filetype * 8^5) + (0 * 8^4) + (0 * 8^3) + (owner * 8^2) +
-                (group * 8^1) + (others * 8^0) = decimal value
-
-        Args:
-            file_data:
-                data returned by FTP `LIST` command
-            server_type:
-                data returned by `ftplib.FTP.getwelcome` method with server
-                response code stripped from first 4 chars
-            voicecmd_mtime:
-                data returned by `MDTM` command with server response code
-                stripped from first 4 chars
-
-        Returns:
-            `File` object
-
-        Raises:
-            ValueError:
-                if server_type is not supported
-        """
-        if server_type == "vsFTPd 3.0.5":
-            name = file_data[56:]
-            size = int(file_data[36:42])
-            uid = int(file_data[16:17])
-            gid = int(file_data[25:26])
-            mtime = int(
-                datetime.datetime.strptime(voidcmd_mtime[4:], "%Y%m%d%H%M%S")
-                .replace(tzinfo=datetime.timezone.utc)
-                .timestamp()
-            )
-            perm_slice = file_data[0:10]
-            file_type = perm_slice[0].replace("d", "4").replace("-", "1")
-            file_perm = (
-                perm_slice[1:10]
-                .replace("-", "0")
-                .replace("r", "4")
-                .replace("w", "2")
-                .replace("x", "1")
-            )
-            file_mode = (
-                (int(file_type) * 8**5)
-                + (0 * 8**4)
-                + (0 * 8**3)
-                + (
-                    int(int(file_perm[0]) + int(file_perm[1]) + int(file_perm[2]))
-                    * 8**2
-                )
-                + (
-                    int(int(file_perm[3]) + int(file_perm[4]) + int(file_perm[5]))
-                    * 8**1
-                )
-                + (
-                    int(int(file_perm[6]) + int(file_perm[7]) + int(file_perm[8]))
-                    * 8**0
-                )
-            )
-            return cls(
-                name,
-                mtime,
-                size,
-                uid,
-                gid,
-                None,
-                file_mode,
-            )
-        else:
-            raise ValueError("Unsupported server type")
-
-    @classmethod
-    def from_stat_result(cls, file_data: os.stat_result, file_name: str) -> "File":
-        return cls(
-            file_name,
-            file_data.st_mtime,
-            file_data.st_size,
-            file_data.st_uid,
-            file_data.st_gid,
-            file_data.st_atime,
-            file_data.st_mode,
-        )
+from file_retriever.file import File
 
 
 class _ftpClient:
@@ -184,7 +24,7 @@ class _ftpClient:
         username: str,
         password: str,
         host: str,
-        port: str | int,
+        port: Union[str, int],
     ):
         """Initializes client instance.
 
@@ -195,12 +35,9 @@ class _ftpClient:
             port: port number for server
 
         """
-        self.username = username
-        self.password = password
-        self.host = host
-        self.port = int(port)
-
-        self.connection = self._create_ftp_connection()
+        self.connection = self.__create_ftp_connection(
+            username=username, password=password, host=host, port=int(port)
+        )
 
     def __enter__(self, *args):
         """
@@ -218,7 +55,9 @@ class _ftpClient:
         """
         self.connection.close()
 
-    def _create_ftp_connection(self) -> ftplib.FTP:
+    def __create_ftp_connection(
+        self, username: str, password: str, host: str, port: int
+    ) -> ftplib.FTP:
         """
         Opens connection to server via FTP.
 
@@ -230,13 +69,11 @@ class _ftpClient:
             ftplib.error_perm: if unable to authenticate with server
         """
         try:
-            ftp_client = ftplib.FTP(
-                host=self.host,
-            )
+            ftp_client = ftplib.FTP(source_address=(host, port))
             ftp_client.encoding = "utf-8"
             ftp_client.login(
-                user=self.username,
-                passwd=self.password,
+                user=username,
+                passwd=password,
             )
             return ftp_client
         except (
@@ -277,9 +114,7 @@ class _ftpClient:
         except ftplib.error_reply:
             raise
 
-    def download_file(
-        self, file: str, remote_dir: str = ".", local_dir: str = "."
-    ) -> None:
+    def download_file(self, file: str, remote_dir: str, local_dir: str) -> None:
         """
         Downloads file from `remote_dir` on server to `local_dir`.
 
@@ -287,9 +122,9 @@ class _ftpClient:
             file:
                 name of file to upload
             remote_dir:
-                remote directory to download file from, default is '.'
+                remote directory to download file from
             local_dir:
-                local directory to download file to, default is '.'
+                local directory to download file to
 
         Returns:
             None
@@ -305,9 +140,7 @@ class _ftpClient:
         except OSError:
             raise
 
-    def upload_file(
-        self, file: str, remote_dir: str = ".", local_dir: str = "."
-    ) -> File:
+    def upload_file(self, file: str, remote_dir: str, local_dir: str) -> File:
         """
         Upload file from `local_dir` to `remote_dir` on server.
 
@@ -315,9 +148,9 @@ class _ftpClient:
             file:
                 name of file to upload
             remote_dir:
-                remote directory to upload file to, default is '.'
+                remote directory to upload file to
             local_dir:
-                local directory to upload file from, default is '.'
+                local directory to upload file from
 
         Returns:
             uploaded file as `File` object
@@ -360,7 +193,7 @@ class _sftpClient:
         username: str,
         password: str,
         host: str,
-        port: str | int,
+        port: Union[str, int],
     ):
         """Initializes client instance.
 
@@ -371,11 +204,9 @@ class _sftpClient:
             port: port number for server
 
         """
-        self.username = username
-        self.password = password
-        self.host = host
-        self.port = int(port)
-        self.connection = self._create_sftp_connection()
+        self.connection = self.__create_sftp_connection(
+            username=username, password=password, host=host, port=int(port)
+        )
 
     def __enter__(self, *args):
         """
@@ -393,7 +224,9 @@ class _sftpClient:
         """
         self.connection.close()
 
-    def _create_sftp_connection(self) -> paramiko.SFTPClient:
+    def __create_sftp_connection(
+        self, username: str, password: str, host: str, port: int
+    ) -> paramiko.SFTPClient:
         """
         Opens connection to server via SFTP.
 
@@ -409,10 +242,10 @@ class _sftpClient:
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             ssh.connect(
-                hostname=self.host,
-                port=self.port,
-                username=self.username,
-                password=self.password,
+                hostname=host,
+                port=port,
+                username=username,
+                password=password,
             )
             sftp_client = ssh.open_sftp()
             return sftp_client
@@ -434,7 +267,7 @@ class _sftpClient:
         """
         try:
             file_metadata = self.connection.listdir_attr(file_dir)
-            return [File.from_SFTPAttributes(file_data=i) for i in file_metadata]
+            return [File.from_SFTPAttributes(file_attr=i) for i in file_metadata]
         except OSError:
             raise
 

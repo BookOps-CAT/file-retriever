@@ -5,11 +5,11 @@ ftp or sftp client.
 
 import datetime
 import os
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Union
 from file_retriever._clients import _ftpClient, _sftpClient, File
 
 
-class ConnectionClient:
+class Client:
     """
     A wrapper class to use when interacting with remote storage. Creates
     client to interact with server via `_ftpClient` or `_sftpClient` object
@@ -37,31 +37,32 @@ class ConnectionClient:
         """
 
         self.vendor = vendor
-        self.username = username
-        self.password = password
         self.host = host
-        self.port = port
+        self.port = int(port)
         self.remote_dir = remote_dir
 
-        self.client = self._create_client()
+        self.session = self._create_client(username=username, password=password)
 
-    def _create_client(self) -> _ftpClient | _sftpClient:
-        if int(self.port) == 21:
-            return _ftpClient(
-                username=self.username,
-                password=self.password,
-                host=self.host,
-                port=self.port,
-            )
-        elif int(self.port) == 22:
-            return _sftpClient(
-                username=self.username,
-                password=self.password,
-                host=self.host,
-                port=self.port,
-            )
-        else:
-            raise ValueError(f"Invalid port number {self.port}")
+    def _create_client(
+        self, username: str, password: str
+    ) -> Union[_ftpClient, _sftpClient]:
+        match self.port:
+            case 21:
+                return _ftpClient(
+                    username=username,
+                    password=password,
+                    host=self.host,
+                    port=self.port,
+                )
+            case 22:
+                return _sftpClient(
+                    username=username,
+                    password=password,
+                    host=self.host,
+                    port=self.port,
+                )
+            case _:
+                raise ValueError(f"Invalid port number: {self.port}")
 
     def list_files(
         self, time_delta: int = 0, src_dir: Optional[str] = None
@@ -82,8 +83,8 @@ class ConnectionClient:
 
         if not src_dir or src_dir is None:
             src_dir = self.remote_dir
-        with self.client as client:
-            files = client.list_file_data(src_dir)
+        with self.session as session:
+            files = session.list_file_data(src_dir)
             if time_delta > 0:
                 return [
                     i
@@ -121,8 +122,8 @@ class ConnectionClient:
 
         if not src_dir or src_dir is None:
             src_dir = self.remote_dir
-        with self.client as client:
-            files = client.list_file_data(src_dir)
+        with self.session as session:
+            files = session.list_file_data(src_dir)
             if time_delta > 0:
                 get_files = [
                     i.file_name
@@ -135,7 +136,7 @@ class ConnectionClient:
             else:
                 get_files = [i.file_name for i in files]
             for file in get_files:
-                client.download_file(file=file, remote_dir=src_dir, local_dir=dst_dir)
+                session.download_file(file=file, remote_dir=src_dir, local_dir=dst_dir)
         return [File.from_stat_result(os.stat(i), i) for i in get_files]
 
     def put_files(
@@ -159,8 +160,8 @@ class ConnectionClient:
         """
         if dst_dir is None:
             dst_dir = self.remote_dir
-        with self.client as client:
+        with self.session as session:
             for file in files:
-                client.upload_file(file=file, remote_dir=dst_dir, local_dir=src_dir)
-            uploaded_files = client.list_file_data(src_dir)
+                session.upload_file(file=file, remote_dir=dst_dir, local_dir=src_dir)
+            uploaded_files = session.list_file_data(src_dir)
             return uploaded_files
