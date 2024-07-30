@@ -69,18 +69,20 @@ class _ftpClient:
             ftplib.error_perm: if unable to authenticate with server
         """
         try:
-            ftp_client = ftplib.FTP(source_address=(host, port))
+            ftp_client = ftplib.FTP()
+            ftp_client.connect(host=host, port=port)
             ftp_client.encoding = "utf-8"
             ftp_client.login(
                 user=username,
                 passwd=password,
             )
             return ftp_client
-        except (
-            ftplib.error_temp,
-            ftplib.error_perm,
-        ):
-            raise
+        except ftplib.error_perm:
+            raise ftplib.error_perm(
+                "Unable to authenticate with server with provided credentials."
+            )
+        except ftplib.error_temp:
+            raise ftplib.error_temp("Unable to connect to server.")
 
     def list_file_data(self, file_dir: str) -> List[File]:
         """

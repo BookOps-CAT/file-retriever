@@ -65,6 +65,9 @@ class MockFTP:
     def __exit__(self, *args) -> None:
         self.close()
 
+    def connect(self, *args, **kwargs) -> None:
+        pass
+
     def close(self, *args, **kwargs) -> None:
         pass
 
