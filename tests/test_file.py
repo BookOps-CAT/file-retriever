@@ -64,53 +64,39 @@ def test_File_from_SFTPAttributes_None_st_mtime(mock_sftp_attr):
 
 
 @pytest.mark.parametrize(
-    "data, time_str, mtime, mode",
+    "permissions, str_time, mtime, mode",
     [
         (
-            "-rw-rw-rw-    1 0        0          140401 Jan  1 00:01 foo.mrc",
+            "-rw-rw-rw-",
             "220 20240101010000",
             1704070800,
             33206,
         ),
         (
-            "-rw-r--r--    1 0        0          140401 Feb  2 02:02 foo.mrc",
+            "-rw-r--r--",
             "220 20240202020202",
             1706839322,
             33188,
         ),
         (
-            "-rwxrwxrwx    1 0        0          140401 Mar  3 03:03 foo.mrc",
+            "-rwxrwxrwx",
             "220 20240303030303",
             1709434983,
             33279,
         ),
     ],
 )
-def test_File_from_ftp_response(data, time_str, mtime, mode):
-    file_data = data
-    server = "vsFTPd 3.0.5"
-    time = time_str
+def test_File_from_ftp_response(permissions, str_time, mtime, mode):
     file = File.from_ftp_response(
-        retr_data=file_data, server_type=server, voidcmd_mtime=time
+        permissions=permissions, mdtm_time=str_time, size=140401, file_name="foo.mrc"
     )
     assert file.file_name == "foo.mrc"
     assert file.file_mtime == mtime
     assert file.file_size == 140401
-    assert file.file_uid == 0
-    assert file.file_gid == 0
+    assert file.file_uid is None
+    assert file.file_gid is None
     assert file.file_atime is None
     assert file.file_mode == mode
-
-
-def test_File_from_ftp_response_other_server():
-    file_data = "-rw-rw-rw-    1 0        0          140401 Jan  1 00:01 foo.mrc"
-    server = "fooFTP"
-    time = "220 20240101010000"
-    with pytest.raises(ValueError) as exc:
-        File.from_ftp_response(
-            retr_data=file_data, server_type=server, voidcmd_mtime=time
-        )
-        assert "Server type not recognized." in str(exc)
 
 
 def test_File_from_stat_result(mock_sftp_attr):

@@ -77,12 +77,18 @@ class MockFTP:
     def login(self, *args, **kwargs) -> None:
         pass
 
+    def nlst(self, *args, **kwargs) -> List[str]:
+        return ["foo.mrc"]
+
     def retrbinary(self, *args, **kwargs) -> None:
         pass
 
     def retrlines(self, *args, **kwargs) -> List[str]:
         files = "-rw-r--r--    1 0        0          140401 Jan  1 00:01 foo.mrc"
         return args[1](files)
+
+    def size(self, *args, **kwargs) -> int:
+        return 140401
 
     def storbinary(self, *args, **kwargs) -> None:
         pass

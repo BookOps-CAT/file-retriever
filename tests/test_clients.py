@@ -42,6 +42,20 @@ class TestMock_ftpClient:
         with pytest.raises(ftplib.error_temp):
             _ftpClient(**stub_creds)
 
+    def test_ftpClient_get_file_data(self, stub_client, stub_creds):
+        stub_creds["port"] = "21"
+        ftp = _ftpClient(**stub_creds)
+        files = ftp.get_file_data("foo.mrc", "testdir")
+        assert files == File(
+            file_name="foo.mrc",
+            file_mtime=1704070800,
+            file_size=140401,
+            file_mode=33188,
+            file_uid=None,
+            file_gid=None,
+            file_atime=None,
+        )
+
     def test_ftpClient_list_file_data(self, stub_client, stub_creds):
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
@@ -52,8 +66,8 @@ class TestMock_ftpClient:
                 file_mtime=1704070800,
                 file_size=140401,
                 file_mode=33188,
-                file_uid=0,
-                file_gid=0,
+                file_uid=None,
+                file_gid=None,
                 file_atime=None,
             )
         ]

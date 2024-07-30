@@ -61,8 +61,8 @@ class TestMockClient:
         with pytest.raises(paramiko.AuthenticationException):
             Client(**stub_creds)
 
-    @pytest.mark.parametrize("port", [21, 22])
-    def test_Client_list_files(self, stub_client, stub_creds, port):
+    @pytest.mark.parametrize("port, uid_gid", [(21, None), (22, 0)])
+    def test_Client_list_files(self, stub_client, stub_creds, port, uid_gid):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
@@ -77,8 +77,8 @@ class TestMockClient:
                 file_mtime=1704070800,
                 file_size=140401,
                 file_mode=33188,
-                file_uid=0,
-                file_gid=0,
+                file_uid=uid_gid,
+                file_gid=uid_gid,
                 file_atime=None,
             )
         ]
@@ -137,9 +137,10 @@ class TestMockClient:
             connect.get_files()
 
     @pytest.mark.parametrize(
-        "port, file_dir", [(21, None), (21, "test"), (22, None), (22, "test")]
+        "port, file_dir, uid_gid",
+        [(21, None, None), (21, "test", None), (22, None, 0), (22, "test", 0)],
     )
-    def test_Client_put_files(self, stub_client, stub_creds, port, file_dir):
+    def test_Client_put_files(self, stub_client, stub_creds, port, file_dir, uid_gid):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
@@ -153,8 +154,8 @@ class TestMockClient:
                 file_mtime=1704070800,
                 file_size=140401,
                 file_mode=33188,
-                file_uid=0,
-                file_gid=0,
+                file_uid=uid_gid,
+                file_gid=uid_gid,
                 file_atime=None,
             )
         ]
