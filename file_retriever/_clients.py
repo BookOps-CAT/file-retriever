@@ -91,7 +91,7 @@ class _ftpClient:
         """
         return data
 
-    def get_file_data(self, file: str, remote_dir: str) -> File:
+    def get_remote_file_data(self, file: str, remote_dir: str) -> File:
         """
         Retrieves metadata for single file on server.
 
@@ -123,26 +123,26 @@ class _ftpClient:
         except ftplib.error_reply:
             raise
 
-    def list_file_data(self, file_dir: str) -> List[File]:
+    def list_file_data(self, remote_dir: str) -> List[File]:
         """
-        Retrieves metadata for each file in `file_dir` on server.
+        Retrieves metadata for each file in `remote_dir` on server.
 
         Args:
-            file_dir: directory on server to interact with
+            remote_dir: directory on server to interact with
 
         Returns:
-            list of `File` objects representing files in `file_dir`
+            list of `File` objects representing files in `remote_dir`
 
         Raises:
             ftplib.error_reply:
-                if `file_dir` does not exist or if server response code is
+                if `remote_dir` does not exist or if server response code is
                 not in range 200-299
         """
         files = []
         try:
-            file_list = self.connection.nlst(file_dir)
+            file_list = self.connection.nlst(remote_dir)
             for file in file_list:
-                files.append(self.get_file_data(file, file_dir))
+                files.append(self.get_remote_file_data(file, remote_dir))
         except ftplib.error_reply:
             raise
         return files
@@ -199,7 +199,7 @@ class _ftpClient:
         try:
             with open(remote_file, "rb") as rf:
                 self.connection.storbinary(f"STOR {local_file}", rf)
-            return self.get_file_data(file, remote_dir)
+            return self.get_remote_file_data(file, remote_dir)
         except (OSError, ftplib.error_reply):
             raise
 
@@ -274,7 +274,7 @@ class _sftpClient:
         except (paramiko.SSHException, paramiko.AuthenticationException):
             raise
 
-    def get_file_data(self, file: str, remote_dir: str) -> File:
+    def get_remote_file_data(self, file: str, remote_dir: str) -> File:
         """
         Retrieves metadata for single file on server.
 
@@ -298,21 +298,21 @@ class _sftpClient:
         except OSError:
             raise
 
-    def list_file_data(self, file_dir: str) -> List[File]:
+    def list_file_data(self, remote_dir: str) -> List[File]:
         """
-        Lists metadata for each file in `file_dir` on server.
+        Lists metadata for each file in `remote_dir` on server.
 
         Args:
-            file_dir: directory on server to interact with
+            remote_dir: directory on server to interact with
 
         Returns:
-            list of `File` objects representing files in `file_dir`
+            list of `File` objects representing files in `remote_dir`
 
         Raises:
-            OSError: if `file_dir` does not exist
+            OSError: if `remote_dir` does not exist
         """
         try:
-            file_metadata = self.connection.listdir_attr(file_dir)
+            file_metadata = self.connection.listdir_attr(remote_dir)
             return [File.from_SFTPAttributes(file_attr=i) for i in file_metadata]
         except OSError:
             raise

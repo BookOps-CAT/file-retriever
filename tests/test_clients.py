@@ -42,10 +42,10 @@ class TestMock_ftpClient:
         with pytest.raises(ftplib.error_temp):
             _ftpClient(**stub_creds)
 
-    def test_ftpClient_get_file_data(self, stub_client, stub_creds):
+    def test_ftpClient_get_remote_file_data(self, stub_client, stub_creds):
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
-        files = ftp.get_file_data("foo.mrc", "testdir")
+        files = ftp.get_remote_file_data("foo.mrc", "testdir")
         assert files == File(
             file_name="foo.mrc",
             file_mtime=1704070800,
@@ -55,6 +55,14 @@ class TestMock_ftpClient:
             file_gid=None,
             file_atime=None,
         )
+
+    def test_ftpClient_get_remote_file_data_connection_error(
+        self, client_error_reply, stub_creds
+    ):
+        stub_creds["port"] = "21"
+        ftp = _ftpClient(**stub_creds)
+        with pytest.raises(ftplib.error_reply):
+            ftp.get_remote_file_data("foo.mrc", "testdir")
 
     def test_ftpClient_list_file_data(self, stub_client, stub_creds):
         stub_creds["port"] = "21"
@@ -159,6 +167,28 @@ class TestMock_sftpClient:
         stub_creds["port"] = "22"
         with _sftpClient(**stub_creds) as client:
             assert client.connection is not None
+
+    def test_sftpClient_get_remote_file_data(self, stub_client, stub_creds):
+        stub_creds["port"] = "22"
+        ftp = _sftpClient(**stub_creds)
+        file = ftp.get_remote_file_data("foo.mrc", "testdir")
+        assert file == File(
+            file_name="foo.mrc",
+            file_mtime=1704070800,
+            file_size=140401,
+            file_uid=0,
+            file_gid=0,
+            file_atime=None,
+            file_mode=33188,
+        )
+
+    def test_sftpClient_get_remote_file_data_not_found(
+        self, client_file_error, stub_creds
+    ):
+        stub_creds["port"] = "22"
+        sftp = _sftpClient(**stub_creds)
+        with pytest.raises(OSError):
+            sftp.get_remote_file_data("foo.mrc", "testdir")
 
     def test_sftpClient_list_file_data(self, stub_client, stub_creds):
         stub_creds["port"] = "22"

@@ -64,27 +64,45 @@ class Client:
             case _:
                 raise ValueError(f"Invalid port number: {self.port}")
 
+    def get_file_data(self, file: str, remote_dir: Optional[str] = None) -> List[File]:
+        """
+        Retrieve metadata for file in `remote_dir` on server. If `remote_dir` is not
+        provided then data for file in `self.remote_dir` will be retrieved.
+
+        Args:
+            file: name of file to retrieve metadata for
+            remote_dir: directory on server to interact with
+
+        Returns:
+            files in `remote_dir` represented as `File` object
+        """
+        if not remote_dir or remote_dir is None:
+            remote_dir = self.remote_dir
+        with self.session as session:
+            return session.get_remote_file_data(file, remote_dir)
+
     def list_files(
-        self, time_delta: int = 0, src_dir: Optional[str] = None
+        self, time_delta: int = 0, remote_dir: Optional[str] = None
     ) -> List[File]:
         """
-        Lists each file in `src_dir` directory on server. If `src_dir` is not provided
-        then files in `self.remote_dir` will be listed. If `time_delta` is provided then
-        files created in the last x days will be listed where x is the `time_delta`.
+        Lists each file in `remote_dir` directory on server. If `remote_dir` is not
+        provided then files in `self.remote_dir` will be listed. If `time_delta`
+        is provided then files created in the last x days will be listed where x
+        is the `time_delta`.
 
         Args:
             time_delta: number of days to go back in time to list files
-            src_dir: directory on server to interact with
+            remote_dir: directory on server to interact with
 
         Returns:
-            list of files in `src_dir` represented as `File` objects
+            list of files in `remote_dir` represented as `File` objects
         """
         today = datetime.datetime.now()
 
-        if not src_dir or src_dir is None:
-            src_dir = self.remote_dir
+        if not remote_dir or remote_dir is None:
+            remote_dir = self.remote_dir
         with self.session as session:
-            files = session.list_file_data(src_dir)
+            files = session.list_file_data(remote_dir)
             if time_delta > 0:
                 return [
                     i
@@ -97,71 +115,56 @@ class Client:
             else:
                 return files
 
-    def get_files(
+    def get_file(
         self,
-        time_delta: int = 0,
-        src_dir: Optional[str] = None,
-        dst_dir: str = ".",
-    ) -> List[File]:
+        file: str,
+        remote_dir: Optional[str] = None,
+        local_dir: str = ".",
+    ) -> File:
         """
-        Downloads files from `src_dir` on server to `dst_dir`. If `src_dir` is not
-        provided then files will be downloaded from `self.src_dir`. If `dst_dir` is
-        not provided then files will be downloaded to cwd. If `time_delta` is provided
-        then files created in the last x days will be downloaded where x is the
-        `time_delta`.
+        Downloads `file` from `remote_dir` on server to `local_dir`. If `remote_dir`
+        is not provided then file will be downloaded from `self.remote_dir`. If
+        `local_dir` is not provided then file will be downloaded to cwd.
 
         Args:
-            time_delta: number of days to go back in time to list files
-            src_dir: directory on server to download files from
-            dst_dir: local directory to download files to
+            file: name of file to download
+            remote_dir: directory on server to download file from
+            local_dir: local directory to download file to
 
         Returns:
-            list of files downloaded to `dst_dir`
+            file downloaded to `local_dir` as `File` object
         """
-        today = datetime.datetime.now()
-
-        if not src_dir or src_dir is None:
-            src_dir = self.remote_dir
+        if not remote_dir or remote_dir is None:
+            remote_dir = self.remote_dir
         with self.session as session:
-            files = session.list_file_data(src_dir)
-            if time_delta > 0:
-                get_files = [
-                    i.file_name
-                    for i in files
-                    if datetime.datetime.fromtimestamp(
-                        i.file_mtime, tz=datetime.timezone.utc
-                    )
-                    >= today - datetime.timedelta(days=time_delta)
-                ]
-            else:
-                get_files = [i.file_name for i in files]
-            for file in get_files:
-                session.download_file(file=file, remote_dir=src_dir, local_dir=dst_dir)
-        return [File.from_stat_result(os.stat(i), i) for i in get_files]
+            session.download_file(file=file, remote_dir=remote_dir, local_dir=local_dir)
 
-    def put_files(
+        local_file = os.path.normpath(os.path.join(local_dir, file))
+        return File.from_stat_result(os.stat(local_file), file)
+
+    def put_file(
         self,
-        files: List[str],
-        src_dir: Optional[str] = None,
-        dst_dir: Optional[str] = None,
-    ) -> List[File]:
+        file: str,
+        local_dir: str = ".",
+        remote_dir: Optional[str] = None,
+    ) -> File:
         """
-        Uploads files from local directory to server. If `dst_dir` is not
-        provided then files will be uploaded to `self.remote_dir`. If `src_dir`
-        is not provided, files will be uploaded from cwd.
+        Uploads file from local directory to server. If `remote_dir` is not
+        provided then file will be uploaded to `self.remote_dir`. If `local_dir`
+        is not provided then file will be uploaded from cwd.
 
         Args:
-            files: list of files to upload
-            src_dir: local directory to upload files from
-            dst_dir: remote directory to upload files to
+            file: name of file to upload
+            local_dir: local directory to upload file from
+            remote_dir: remote directory to upload file to
 
         Returns:
-            list of files uploaded to `dst_dir`
+            file uploaded to `remote_dir` as `File` object
         """
-        if dst_dir is None:
-            dst_dir = self.remote_dir
+        if remote_dir is None:
+            remote_dir = self.remote_dir
         with self.session as session:
-            for file in files:
-                session.upload_file(file=file, remote_dir=dst_dir, local_dir=src_dir)
-            uploaded_files = session.list_file_data(src_dir)
-            return uploaded_files
+            uploaded_file = session.upload_file(
+                file=file, remote_dir=remote_dir, local_dir=local_dir
+            )
+            return uploaded_file

@@ -39,12 +39,12 @@ class File:
             AttributeError:
                 if no filename is provided or if no file modification time is provided
         """
-        if hasattr(file_attr, "filename"):
+        if file_name is not None:
+            file_attr.filename = file_name
+        elif hasattr(file_attr, "filename"):
             pass
         elif hasattr(file_attr, "longname"):
             file_attr.filename = file_attr.longname[56:]
-        elif file_name is not None:
-            file_attr.filename = file_name
         else:
             raise AttributeError("No filename provided")
 
