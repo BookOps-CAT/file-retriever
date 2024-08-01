@@ -8,7 +8,8 @@ Can be used to connect to vendor servers or internal network drives.
 import ftplib
 import os
 import paramiko
-from typing import List, Union
+import sys
+from typing import List, Union, Optional
 
 from file_retriever.file import File
 
@@ -35,7 +36,7 @@ class _ftpClient:
             port: port number for server
 
         """
-        self.connection = self.__create_ftp_connection(
+        self.connection = self._create_ftp_connection(
             username=username, password=password, host=host, port=int(port)
         )
 
@@ -55,7 +56,7 @@ class _ftpClient:
         """
         self.connection.close()
 
-    def __create_ftp_connection(
+    def _create_ftp_connection(
         self, username: str, password: str, host: str, port: int
     ) -> ftplib.FTP:
         """
@@ -69,50 +70,95 @@ class _ftpClient:
             ftplib.error_perm: if unable to authenticate with server
         """
         try:
-            ftp_client = ftplib.FTP(source_address=(host, port))
+            ftp_client = ftplib.FTP()
+            ftp_client.connect(host=host, port=port)
             ftp_client.encoding = "utf-8"
             ftp_client.login(
                 user=username,
                 passwd=password,
             )
             return ftp_client
-        except (
-            ftplib.error_temp,
-            ftplib.error_perm,
-        ):
-            raise
+        except ftplib.error_perm:
+            raise ftplib.error_perm(
+                "Unable to authenticate with server with provided credentials."
+            )
+        except ftplib.error_temp:
+            raise ftplib.error_temp("Unable to connect to server.")
 
-    def list_file_data(self, file_dir: str) -> List[File]:
+    def get_remote_file_data(self, file: str, remote_dir: Optional[str] = None) -> File:
         """
-        Lists metadata for each file in `file_dir` on server.
+        Retrieves metadata for single file on server.
 
         Args:
-            file_dir: directory on server to interact with
+            file: name of file to retrieve metadata for
+            remote_dir: directory on server to interact with
 
         Returns:
-            list of `File` objects representing files in `file_dir`
+            `File` object representing file in `remote_dir`
 
         Raises:
             ftplib.error_reply:
-                if `file_dir` does not exist or if server response code is
+                if `file` or `remote_dir` does not exist or if server response
+                code is not in range 200-299
+        """
+        if remote_dir is not None:
+            remote_file = f"{remote_dir}/{file}"
+        else:
+            remote_file = file
+        file_name = os.path.basename(remote_file)
+        try:
+
+            permissions = None
+
+            def get_file_permissions(data):
+                nonlocal permissions
+                permissions = File.parse_permissions(permissions_str=data)
+
+            self.connection.retrlines(f"LIST {remote_file}", get_file_permissions),
+            if permissions is None:
+                raise ftplib.error_perm("File not found on server.")
+
+            return File(
+                file_name=file_name,
+                file_size=self.connection.size(remote_file),
+                file_mtime=File.parse_mdtm_time(
+                    self.connection.voidcmd(f"MDTM {remote_file}")
+                ),
+                file_mode=permissions,
+            )
+        except ftplib.error_reply:
+            raise ftplib.error_reply(
+                f"Received unexpected response from server: {sys.exc_info()[1]}"
+            )
+        except ftplib.error_perm:
+            raise ftplib.error_perm(
+                f"Unable to retrieve file data: {sys.exc_info()[1]}"
+            )
+
+    def list_file_data(self, remote_dir: str) -> List[File]:
+        """
+        Retrieves metadata for each file in `remote_dir` on server.
+
+        Args:
+            remote_dir: directory on server to interact with
+
+        Returns:
+            list of `File` objects representing files in `remote_dir`
+
+        Raises:
+            ftplib.error_reply:
+                if `remote_dir` does not exist or if server response code is
                 not in range 200-299
         """
+        files = []
         try:
-            files = []
-            file_metadata: List[str] = []
-
-            server = self.connection.getwelcome()[4:].strip("()")
-            self.connection.retrlines(f"LIST {file_dir}", file_metadata.append)
-            for data in file_metadata:
-                file = File.from_ftp_response(
-                    data,
-                    server,
-                    self.connection.voidcmd(f"MDTM {file_dir}/{data[56:]}"),
-                )
+            file_data_list = self.connection.nlst(remote_dir)
+            for data in file_data_list:
+                file = self.get_remote_file_data(data)
                 files.append(file)
-            return files
         except ftplib.error_reply:
             raise
+        return files
 
     def download_file(self, file: str, remote_dir: str, local_dir: str) -> None:
         """
@@ -137,7 +183,7 @@ class _ftpClient:
         try:
             with open(local_file, "wb") as f:
                 self.connection.retrbinary(f"RETR {remote_file}", f.write)
-        except OSError:
+        except (OSError, ftplib.error_reply):
             raise
 
     def upload_file(self, file: str, remote_dir: str, local_dir: str) -> File:
@@ -166,18 +212,7 @@ class _ftpClient:
         try:
             with open(remote_file, "rb") as rf:
                 self.connection.storbinary(f"STOR {local_file}", rf)
-
-            file_data = ""
-
-            def get_file_data(data):
-                nonlocal file_data
-                file_data = data
-
-            self.connection.retrlines(f"LIST {remote_dir}", get_file_data)
-
-            server = self.connection.getwelcome()[4:].strip("()")
-            time = self.connection.voidcmd(f"MDTM {file_data[56:]}")
-            return File.from_ftp_response(file_data, server, time)
+            return self.get_remote_file_data(file, remote_dir)
         except (OSError, ftplib.error_reply):
             raise
 
@@ -204,7 +239,7 @@ class _sftpClient:
             port: port number for server
 
         """
-        self.connection = self.__create_sftp_connection(
+        self.connection = self._create_sftp_connection(
             username=username, password=password, host=host, port=int(port)
         )
 
@@ -224,7 +259,7 @@ class _sftpClient:
         """
         self.connection.close()
 
-    def __create_sftp_connection(
+    def _create_sftp_connection(
         self, username: str, password: str, host: str, port: int
     ) -> paramiko.SFTPClient:
         """
@@ -252,22 +287,46 @@ class _sftpClient:
         except (paramiko.SSHException, paramiko.AuthenticationException):
             raise
 
-    def list_file_data(self, file_dir: str) -> List[File]:
+    def get_remote_file_data(self, file: str, remote_dir: str) -> File:
         """
-        Lists metadata for each file in `file_dir` on server.
+        Retrieves metadata for single file on server.
 
         Args:
-            file_dir: directory on server to interact with
+            file: name of file to retrieve metadata for
+            remote_dir: directory on server to interact with
 
         Returns:
-            list of `File` objects representing files in `file_dir`
+            `File` object representing file in `remote_dir`
 
         Raises:
-            OSError: if `file_dir` does not exist
+            ftplib.error_reply:
+                if `file` or `remote_dir` does not exist or if server response
+                code is not in range 200-299
+        """
+        remote_file = os.path.normpath(os.path.join(remote_dir, file))
+        try:
+            return File.from_stat_data(
+                data=self.connection.stat(remote_file), file_name=file
+            )
+        except OSError:
+            raise
+
+    def list_file_data(self, remote_dir: str) -> List[File]:
+        """
+        Lists metadata for each file in `remote_dir` on server.
+
+        Args:
+            remote_dir: directory on server to interact with
+
+        Returns:
+            list of `File` objects representing files in `remote_dir`
+
+        Raises:
+            OSError: if `remote_dir` does not exist
         """
         try:
-            file_metadata = self.connection.listdir_attr(file_dir)
-            return [File.from_SFTPAttributes(file_attr=i) for i in file_metadata]
+            file_metadata = self.connection.listdir_attr(remote_dir)
+            return [File.from_stat_data(data=i) for i in file_metadata]
         except OSError:
             raise
 
@@ -321,6 +380,6 @@ class _sftpClient:
             uploaded_file = self.connection.put(
                 local_file, f"{remote_dir}/{file}", confirm=True
             )
-            return File.from_SFTPAttributes(uploaded_file, file_name=file)
+            return File.from_stat_data(uploaded_file, file_name=file)
         except OSError:
             raise

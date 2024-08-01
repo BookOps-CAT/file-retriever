@@ -43,7 +43,7 @@ class TestMockClient:
             Client(**stub_creds)
         assert f"Invalid port number: {stub_creds['port']}" in str(e)
 
-    def test_Client_ftp_auth_error(self, client_auth_error, stub_creds):
+    def test_Client_ftp_auth_error(self, mock_auth_error, stub_creds):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
@@ -52,7 +52,7 @@ class TestMockClient:
         with pytest.raises(ftplib.error_perm):
             Client(**stub_creds)
 
-    def test_Client_sftp_auth_error(self, client_auth_error, stub_creds):
+    def test_Client_sftp_auth_error(self, mock_auth_error, stub_creds):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
@@ -61,8 +61,80 @@ class TestMockClient:
         with pytest.raises(paramiko.AuthenticationException):
             Client(**stub_creds)
 
-    @pytest.mark.parametrize("port", [21, 22])
-    def test_Client_list_files(self, stub_client, stub_creds, port):
+    @pytest.mark.parametrize(
+        "port",
+        [21, 22],
+    )
+    def test_Client_check_file_local(self, stub_client_file_exists, stub_creds, port):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (port, "testdir", "test")
+        connect = Client(**stub_creds)
+        file_exists = connect.check_file(file="foo.mrc", check_dir="bar", remote=False)
+        assert file_exists is True
+
+    @pytest.mark.parametrize(
+        "port",
+        [21, 22],
+    )
+    def test_Client_check_file_remote(self, stub_client_file_exists, stub_creds, port):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (port, "testdir", "test")
+        connect = Client(**stub_creds)
+        file_exists = connect.check_file(file="foo.mrc", check_dir="bar", remote=True)
+        assert file_exists is True
+
+    @pytest.mark.parametrize(
+        "port, dir, uid_gid",
+        [(21, "testdir", None), (21, None, None), (22, "testdir", 0), (22, None, 0)],
+    )
+    def test_Client_get_file_data(self, stub_client, stub_creds, port, dir, uid_gid):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (port, "testdir", "test")
+        connect = Client(**stub_creds)
+        file = connect.get_file_data(file="foo.mrc", remote_dir=dir)
+        assert file == File(
+            file_name="foo.mrc",
+            file_mtime=1704070800,
+            file_size=140401,
+            file_mode=33188,
+            file_uid=uid_gid,
+            file_gid=uid_gid,
+            file_atime=None,
+        )
+
+    def test_Client_ftp_get_file_data_not_found(
+        self, mock_connection_error_reply, stub_creds
+    ):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (21, "testdir", "test")
+        connect = Client(**stub_creds)
+        with pytest.raises(ftplib.error_reply):
+            connect.get_file_data("foo.mrc", "testdir")
+
+    def test_Client_sftp_get_file_data_not_found(self, mock_file_error, stub_creds):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (22, "testdir", "test")
+        connect = Client(**stub_creds)
+        with pytest.raises(OSError):
+            connect.get_file_data("foo.mrc", "testdir")
+
+    @pytest.mark.parametrize("port, uid_gid", [(21, None), (22, 0)])
+    def test_Client_list_files(self, stub_client, stub_creds, port, uid_gid):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
@@ -70,117 +142,215 @@ class TestMockClient:
         ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
         all_files = connect.list_files()
-        recent_files = connect.list_files(time_delta=5, src_dir="testdir")
+        recent_files = connect.list_files(time_delta=5, remote_dir="testdir")
         assert all_files == [
             File(
                 file_name="foo.mrc",
                 file_mtime=1704070800,
                 file_size=140401,
                 file_mode=33188,
-                file_uid=0,
-                file_gid=0,
+                file_uid=uid_gid,
+                file_gid=uid_gid,
                 file_atime=None,
             )
         ]
         assert recent_files == []
 
-    def test_Client_list_ftp_file_not_found(self, client_error_reply, stub_creds):
+    def test_Client_list_ftp_file_not_found(
+        self, mock_connection_error_reply, stub_creds
+    ):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
             stub_creds["vendor"],
         ) = (21, "testdir", "test")
+        connect = Client(**stub_creds)
         with pytest.raises(ftplib.error_reply):
-            Client(**stub_creds).list_files()
+            connect.list_files()
 
-    def test_Client_list_sftp_file_not_found(self, client_file_error, stub_creds):
+    def test_Client_list_sftp_file_not_found(self, mock_file_error, stub_creds):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
             stub_creds["vendor"],
         ) = (22, "testdir", "test")
-        with pytest.raises(OSError):
-            Client(**stub_creds).list_files()
-
-    @pytest.mark.parametrize("port", [21, 22])
-    def test_Client_get_files(self, stub_client, stub_creds, port):
-        (
-            stub_creds["port"],
-            stub_creds["remote_dir"],
-            stub_creds["vendor"],
-        ) = (port, "testdir", "test")
-        connect = Client(**stub_creds)
-        all_files = connect.get_files()
-        recent_files = connect.get_files(time_delta=5, src_dir="testdir")
-        assert all_files == [
-            File(
-                file_name="foo.mrc",
-                file_mtime=1704070800,
-                file_size=140401,
-                file_mode=33188,
-                file_uid=0,
-                file_gid=0,
-                file_atime=None,
-            )
-        ]
-        assert recent_files == []
-
-    @pytest.mark.parametrize("port", [21, 22])
-    def test_Client_get_file_not_found(self, client_file_error, stub_creds, port):
-        (
-            stub_creds["port"],
-            stub_creds["remote_dir"],
-            stub_creds["vendor"],
-        ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
         with pytest.raises(OSError):
-            connect.get_files()
+            connect.list_files()
 
     @pytest.mark.parametrize(
-        "port, file_dir", [(21, None), (21, "test"), (22, None), (22, "test")]
+        "port, dir",
+        [(21, "testdir"), (21, None), (22, "testdir"), (22, None)],
     )
-    def test_Client_put_files(self, stub_client, stub_creds, port, file_dir):
+    def test_Client_get_file(self, stub_client, stub_creds, port, dir):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (port, "testdir", "test")
+        connect = Client(**stub_creds)
+        downloaded_file = connect.get_file(
+            "foo.mrc", remote_dir=dir, local_dir="baz_dir", check=False
+        )
+        assert downloaded_file == File(
+            file_name="foo.mrc",
+            file_mtime=1704070800,
+            file_size=140401,
+            file_mode=33188,
+            file_uid=0,
+            file_gid=0,
+            file_atime=None,
+        )
+
+    @pytest.mark.parametrize("port", [21, 22])
+    def test_Client_get_file_not_found(self, mock_file_error, stub_creds, port):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (port, "testdir", "test")
+        connect = Client(**stub_creds)
+        with pytest.raises(OSError):
+            connect.get_file(
+                "foo.mrc", remote_dir="bar_dir", local_dir="baz_dir", check=False
+            )
+
+    @pytest.mark.parametrize(
+        "port",
+        [21, 22],
+    )
+    def test_Client_get_check_file_exists_true(
+        self, stub_client_file_exists, stub_creds, port
+    ):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (port, "testdir", "test")
+        connect = Client(**stub_creds)
+        with pytest.raises(FileExistsError):
+            connect.get_file("foo.mrc", "testdir", check=True)
+
+    @pytest.mark.parametrize(
+        "port, dir",
+        [(21, "testdir"), (21, None), (22, "testdir"), (22, None)],
+    )
+    def test_Client_get_check_file_exists_false(
+        self, stub_client, stub_creds, port, dir
+    ):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (port, "testdir", "test")
+        connect = Client(**stub_creds)
+        downloaded_file = connect.get_file(
+            "foo.mrc", remote_dir=dir, local_dir="baz_dir", check=True
+        )
+        assert downloaded_file == File(
+            file_name="foo.mrc",
+            file_mtime=1704070800,
+            file_size=140401,
+            file_mode=33188,
+            file_uid=0,
+            file_gid=0,
+            file_atime=None,
+        )
+
+    @pytest.mark.parametrize(
+        "port, dir, uid_gid",
+        [(21, None, None), (21, "test", None), (22, None, 0), (22, "test", 0)],
+    )
+    def test_Client_put_file(self, stub_client, stub_creds, port, dir, uid_gid):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
             stub_creds["vendor"],
         ) = (port, "foo", "test")
         connect = Client(**stub_creds)
-        files = connect.put_files(files=["foo.mrc"], src_dir="bar", dst_dir=file_dir)
-        assert files == [
-            File(
-                file_name="foo.mrc",
-                file_mtime=1704070800,
-                file_size=140401,
-                file_mode=33188,
-                file_uid=0,
-                file_gid=0,
-                file_atime=None,
-            )
-        ]
+        put_file = connect.put_file(
+            "foo.mrc", remote_dir=dir, local_dir="baz_dir", check=False
+        )
+        assert put_file == File(
+            file_name="foo.mrc",
+            file_mtime=1704070800,
+            file_size=140401,
+            file_mode=33188,
+            file_uid=uid_gid,
+            file_gid=uid_gid,
+            file_atime=None,
+        )
 
     @pytest.mark.parametrize("port", [21, 22])
-    def test_Client_put_file_not_found(self, client_file_error, stub_creds, port):
+    def test_Client_put_file_not_found(self, mock_file_error, stub_creds, port):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
             stub_creds["vendor"],
         ) = (port, "testdir", "test")
+        connect = Client(**stub_creds)
         with pytest.raises(OSError):
-            Client(**stub_creds).put_files(
-                files=["foo.mrc"], src_dir="bar", dst_dir="test"
+            connect.put_file(
+                "foo.mrc", remote_dir="bar_dir", local_dir="baz_dir", check=False
             )
 
-    def test_Client_put_client_error_reply(self, client_error_reply, stub_creds):
+    def test_Client_put_client_error_reply(
+        self, mock_connection_error_reply, stub_creds
+    ):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
             stub_creds["vendor"],
         ) = (21, "testdir", "test")
+        client = Client(**stub_creds)
         with pytest.raises(ftplib.error_reply):
-            Client(**stub_creds).put_files(
-                files=["foo.mrc"], src_dir="bar", dst_dir="test"
+            client.put_file(
+                "foo.mrc", remote_dir="bar_dir", local_dir="baz_dir", check=False
             )
+
+    @pytest.mark.parametrize(
+        "port",
+        [21, 22],
+    )
+    def test_Client_put_check_file_exists_true(
+        self, stub_client_file_exists, stub_creds, port
+    ):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (port, "testdir", "test")
+        connect = Client(**stub_creds)
+        with pytest.raises(FileExistsError):
+            connect.put_file(
+                "foo.mrc", remote_dir="bar_dir", local_dir="baz_dir", check=True
+            )
+
+    @pytest.mark.parametrize(
+        "port, uid_gid",
+        [(21, None), (22, 0)],
+    )
+    def test_Client_put_check_file_exists_false(
+        self, stub_client, stub_creds, port, uid_gid
+    ):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (port, "testdir", "test")
+        connect = Client(**stub_creds)
+        uploaded_file = connect.put_file(
+            "foo.mrc", remote_dir="bar_dir", local_dir="baz_dir", check=True
+        )
+        assert uploaded_file == File(
+            file_name="foo.mrc",
+            file_mtime=1704070800,
+            file_size=140401,
+            file_mode=33188,
+            file_gid=uid_gid,
+            file_uid=uid_gid,
+            file_atime=None,
+        )
 
 
 @pytest.mark.livetest
