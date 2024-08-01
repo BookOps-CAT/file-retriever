@@ -46,7 +46,7 @@ class MockSFTPAttributes:
 
 
 @pytest.fixture
-def mock_sftp_attr(monkeypatch):
+def mock_file_data(monkeypatch):
     def mock_stat(*args, **kwargs):
         return MockSFTPAttributes()
 

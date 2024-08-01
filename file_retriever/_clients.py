@@ -8,7 +8,7 @@ Can be used to connect to vendor servers or internal network drives.
 import ftplib
 import os
 import paramiko
-from typing import List, Union
+from typing import List, Union, Optional
 
 from file_retriever.file import File
 
@@ -84,14 +84,7 @@ class _ftpClient:
         except ftplib.error_temp:
             raise ftplib.error_temp("Unable to connect to server.")
 
-    def __list_command_callback(self, data: str) -> str:
-        """
-        A callback function to be used with `retrlines` method and
-        `LIST` command. Returns response as a string.
-        """
-        return data
-
-    def get_remote_file_data(self, file: str, remote_dir: str) -> File:
+    def get_remote_file_data(self, file: str, remote_dir: Optional[str] = None) -> File:
         """
         Retrieves metadata for single file on server.
 
@@ -107,18 +100,27 @@ class _ftpClient:
                 if `file` or `remote_dir` does not exist or if server response
                 code is not in range 200-299
         """
-        remote_file = os.path.normpath(os.path.join(remote_dir, file))
+        if remote_dir is not None:
+            remote_file = f"{remote_dir}/{file}"
+            file_name = file
+        else:
+            remote_file = file
+            file_name = os.path.basename(remote_file)
         try:
-            mdtm_time = self.connection.voidcmd(f"MDTM {remote_file}")
-            size = self.connection.size(remote_file)
-            file_data = self.connection.retrlines(
-                f"LIST {remote_file}", self.__list_command_callback
-            )
-            return File.from_ftp_response(
-                permissions=file_data[0:10],
-                mdtm_time=mdtm_time,
-                size=size,
-                file_name=file,
+            permissions = None
+
+            def get_file_permissions(data):
+                nonlocal permissions
+                permissions = File.parse_permissions(data)
+
+            self.connection.retrlines(f"LIST {remote_file}", get_file_permissions),
+            return File(
+                file_name=file_name,
+                file_size=self.connection.size(remote_file),
+                file_mtime=File.parse_mdtm_time(
+                    self.connection.voidcmd(f"MDTM {remote_file}")
+                ),
+                file_mode=permissions,
             )
         except ftplib.error_reply:
             raise
@@ -140,9 +142,10 @@ class _ftpClient:
         """
         files = []
         try:
-            file_list = self.connection.nlst(remote_dir)
-            for file in file_list:
-                files.append(self.get_remote_file_data(file, remote_dir))
+            file_data_list = self.connection.nlst(remote_dir)
+            for data in file_data_list:
+                file = self.get_remote_file_data(data)
+                files.append(file)
         except ftplib.error_reply:
             raise
         return files
@@ -292,8 +295,8 @@ class _sftpClient:
         """
         remote_file = os.path.normpath(os.path.join(remote_dir, file))
         try:
-            return File.from_SFTPAttributes(
-                file_attr=self.connection.stat(remote_file), file_name=file
+            return File.from_stat_data(
+                data=self.connection.stat(remote_file), file_name=file
             )
         except OSError:
             raise
@@ -313,7 +316,7 @@ class _sftpClient:
         """
         try:
             file_metadata = self.connection.listdir_attr(remote_dir)
-            return [File.from_SFTPAttributes(file_attr=i) for i in file_metadata]
+            return [File.from_stat_data(data=i) for i in file_metadata]
         except OSError:
             raise
 
@@ -367,6 +370,6 @@ class _sftpClient:
             uploaded_file = self.connection.put(
                 local_file, f"{remote_dir}/{file}", confirm=True
             )
-            return File.from_SFTPAttributes(uploaded_file, file_name=file)
+            return File.from_stat_data(uploaded_file, file_name=file)
         except OSError:
             raise

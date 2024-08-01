@@ -248,14 +248,17 @@ class TestMock_sftpClient:
 
 @pytest.mark.livetest
 class TestLiveClients:
-    def test_ftpClient_live_list_file_data(self, live_ftp_creds):
+    def test_ftpClient_live_test(self, live_ftp_creds):
         remote_dir = live_ftp_creds["remote_dir"]
         del live_ftp_creds["remote_dir"], live_ftp_creds["vendor"]
-        with _ftpClient(**live_ftp_creds) as live_ftp:
-            files = live_ftp.list_file_data(remote_dir)
-            file_names = [file.file_name for file in files]
-            assert "Sample_Full_RDA.mrc" in file_names
-            assert "220" in live_ftp.connection.getwelcome()
+        live_ftp = _ftpClient(**live_ftp_creds)
+        files = live_ftp.list_file_data(remote_dir)
+        file_names = [file.file_name for file in files]
+        file_data = live_ftp.get_remote_file_data("Sample_Full_RDA.mrc", remote_dir)
+        assert "Sample_Full_RDA.mrc" in file_names
+        assert "220" in live_ftp.connection.getwelcome()
+        assert file_data.file_size == 7015
+        assert file_data.file_mode == 33188
 
     def test_ftpClient_live_test_no_creds(self, stub_creds):
         with pytest.raises(OSError) as exc:
@@ -268,18 +271,23 @@ class TestLiveClients:
         with pytest.raises(ftplib.error_perm) as exc:
             live_ftp_creds["username"] = "bpl"
             _ftpClient(**live_ftp_creds)
-        assert "Login incorrect" in str(exc)
+        assert "Unable to authenticate with server with provided credentials." in str(
+            exc
+        )
 
-    def test_sftpClient_live_list_file_data(self, live_sftp_creds):
+    def test_sftpClient_live_test(self, live_sftp_creds):
         remote_dir = live_sftp_creds["remote_dir"]
         del live_sftp_creds["remote_dir"], live_sftp_creds["vendor"]
         live_sftp = _sftpClient(**live_sftp_creds)
         files = live_sftp.list_file_data(remote_dir)
+        file_data = live_sftp.get_remote_file_data("20049552_NYPL.mrc", remote_dir)
         assert datetime.datetime.fromtimestamp(
             files[0].file_mtime
         ) >= datetime.datetime(2020, 1, 1)
         assert len(files) > 1
         assert live_sftp.connection.get_channel().active == 1
+        assert file_data.file_size == 140401
+        assert file_data.file_mode == 33188
 
     def test_sftpClient_live_test_auth_error(self, live_sftp_creds):
         del live_sftp_creds["remote_dir"], live_sftp_creds["vendor"]

@@ -140,7 +140,7 @@ class Client:
             session.download_file(file=file, remote_dir=remote_dir, local_dir=local_dir)
 
         local_file = os.path.normpath(os.path.join(local_dir, file))
-        return File.from_stat_result(os.stat(local_file), file)
+        return File.from_stat_data(os.stat(local_file), file)
 
     def put_file(
         self,

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import datetime
 import os
 import paramiko
-from typing import Optional
+from typing import Optional, Union
 
 
 @dataclass
@@ -18,59 +18,66 @@ class File:
     file_mode: Optional[int] = None
 
     @classmethod
-    def from_SFTPAttributes(
-        cls, file_attr: paramiko.SFTPAttributes, file_name: Optional[str] = None
+    def from_stat_data(
+        cls,
+        data: Union[os.stat_result, paramiko.SFTPAttributes],
+        file_name: Optional[str] = None,
     ) -> "File":
         """
-        Parses data from `paramiko.SFTPAttributes` object to create `File` object.
-        Accepts data returned by `paramiko.SFTPClient.stat`, `paramiko.SFTPClient.put`
-        or `paramiko.SFTPClient.listdir_attr` methods.
+        Creates a `File` object from `os.stat_result` or `paramiko.SFTPAttributes` data.
+        Accepts data returned by `paramiko.SFTPClient.stat`, `paramiko.SFTPClient.put`,
+        `paramiko.SFTPClient.listdir_attr` or `os.stat` methods.
 
         Args:
-            file_attr:
-                data returned by `paramiko.SFTPAttributes` object
-            file_name:
-                name of file, default is None
+            stat_result_data: data formatted like os.stat_result
+            file_name: name of file
 
         Returns:
             `File` object
-
-        Raises:
-            AttributeError:
-                if no filename is provided or if no file modification time is provided
         """
         if file_name is not None:
-            file_attr.filename = file_name
-        elif hasattr(file_attr, "filename"):
-            pass
-        elif hasattr(file_attr, "longname"):
-            file_attr.filename = file_attr.longname[56:]
+            filename = file_name
+        elif (
+            isinstance(data, paramiko.SFTPAttributes)
+            and hasattr(data, "filename") is True
+        ):
+            filename = data.filename
+        elif (
+            isinstance(data, paramiko.SFTPAttributes)
+            and hasattr(data, "longname") is True
+        ):
+            filename = data.longname[56:]
         else:
             raise AttributeError("No filename provided")
 
-        if not hasattr(file_attr, "st_mtime") or file_attr.st_mtime is None:
+        if not hasattr(data, "st_mtime") or data.st_mtime is None:
             raise AttributeError("No file modification time provided")
 
-        else:
-            return cls(
-                file_attr.filename,
-                file_attr.st_mtime,
-                file_attr.st_size,
-                file_attr.st_uid,
-                file_attr.st_gid,
-                file_attr.st_atime,
-                file_attr.st_mode,
-            )
+        return cls(
+            filename,
+            data.st_mtime,
+            data.st_size,
+            data.st_uid,
+            data.st_gid,
+            data.st_atime,
+            data.st_mode,
+        )
 
-    @classmethod
-    def from_ftp_response(
-        cls, permissions: str, mdtm_time: str, size: Optional[int], file_name: str
-    ) -> "File":
+    @staticmethod
+    def parse_mdtm_time(mdtm_time: str) -> int:
+        """parse string returned by MDTM command to timestamp as int."""
+        return int(
+            datetime.datetime.strptime(mdtm_time[4:], "%Y%m%d%H%M%S")
+            .replace(tzinfo=datetime.timezone.utc)
+            .timestamp()
+        )
+
+    @staticmethod
+    def parse_permissions(permissions: str) -> int:
         """
-        Parses data returned by FTP commands to create `File` object.
+        parse permissions string to decimal value.
 
-        Args:
-            permissions:
+        permissions:
                 a 10 character string representing the permissions associated with
                 a file. The first character represents the file type, the next 9
                 characters represent the permissions.
@@ -83,21 +90,7 @@ class File:
                     number is then converted to a decimal value:
                         (filetype * 8^5) + (0 * 8^4) + (0 * 8^3) + (owner * 8^2) +
                         (group * 8^1) + (others * 8^0) = decimal value
-            size:
-                the size of the file in bytes
-            mdtm_time:
-                date from response returned by `MDTM` command with server response code
-            file_name:
-                name of file
-
-        Returns:
-            `File` object
         """
-        mtime = int(
-            datetime.datetime.strptime(mdtm_time[4:], "%Y%m%d%H%M%S")
-            .replace(tzinfo=datetime.timezone.utc)
-            .timestamp()
-        )
         file_type = permissions[0].replace("d", "4").replace("-", "1")
         file_perm = (
             permissions[1:10]
@@ -106,43 +99,11 @@ class File:
             .replace("w", "2")
             .replace("x", "1")
         )
-        file_mode = (
+        return (
             (int(file_type) * 8**5)
             + (0 * 8**4)
             + (0 * 8**3)
             + (int(int(file_perm[0]) + int(file_perm[1]) + int(file_perm[2])) * 8**2)
             + (int(int(file_perm[3]) + int(file_perm[4]) + int(file_perm[5])) * 8**1)
             + (int(int(file_perm[6]) + int(file_perm[7]) + int(file_perm[8])) * 8**0)
-        )
-        return cls(
-            file_name,
-            mtime,
-            size,
-            None,
-            None,
-            None,
-            file_mode,
-        )
-
-    @classmethod
-    def from_stat_result(
-        cls, stat_result_data: os.stat_result, file_name: str
-    ) -> "File":
-        """Creates a `File` object from `os.stat_result` data.
-
-        Args:
-            stat_result_data: data returned by `os.stat` function
-            file_name: name of file
-
-        Returns:
-            `File` object
-        """
-        return cls(
-            file_name,
-            stat_result_data.st_mtime,
-            stat_result_data.st_size,
-            stat_result_data.st_uid,
-            stat_result_data.st_gid,
-            stat_result_data.st_atime,
-            stat_result_data.st_mode,
         )
