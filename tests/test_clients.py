@@ -286,8 +286,8 @@ class TestLiveClients:
         ) >= datetime.datetime(2020, 1, 1)
         assert len(files) > 1
         assert live_sftp.connection.get_channel().active == 1
-        assert file_data.file_size == 140401
-        assert file_data.file_mode == 33188
+        assert file_data.file_size == 18759
+        assert file_data.file_mode == 33261
 
     def test_sftpClient_live_test_auth_error(self, live_sftp_creds):
         del live_sftp_creds["remote_dir"], live_sftp_creds["vendor"]
