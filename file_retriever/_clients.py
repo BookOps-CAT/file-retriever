@@ -8,6 +8,7 @@ Can be used to connect to vendor servers or internal network drives.
 import ftplib
 import os
 import paramiko
+import sys
 from typing import List, Union, Optional
 
 from file_retriever.file import File
@@ -35,7 +36,7 @@ class _ftpClient:
             port: port number for server
 
         """
-        self.connection = self.__create_ftp_connection(
+        self.connection = self._create_ftp_connection(
             username=username, password=password, host=host, port=int(port)
         )
 
@@ -55,7 +56,7 @@ class _ftpClient:
         """
         self.connection.close()
 
-    def __create_ftp_connection(
+    def _create_ftp_connection(
         self, username: str, password: str, host: str, port: int
     ) -> ftplib.FTP:
         """
@@ -102,18 +103,21 @@ class _ftpClient:
         """
         if remote_dir is not None:
             remote_file = f"{remote_dir}/{file}"
-            file_name = file
         else:
             remote_file = file
-            file_name = os.path.basename(remote_file)
+        file_name = os.path.basename(remote_file)
         try:
+
             permissions = None
 
             def get_file_permissions(data):
                 nonlocal permissions
-                permissions = File.parse_permissions(data)
+                permissions = File.parse_permissions(permissions_str=data)
 
             self.connection.retrlines(f"LIST {remote_file}", get_file_permissions),
+            if permissions is None:
+                raise ftplib.error_perm("File not found on server.")
+
             return File(
                 file_name=file_name,
                 file_size=self.connection.size(remote_file),
@@ -123,7 +127,13 @@ class _ftpClient:
                 file_mode=permissions,
             )
         except ftplib.error_reply:
-            raise
+            raise ftplib.error_reply(
+                f"Received unexpected response from server: {sys.exc_info()[1]}"
+            )
+        except ftplib.error_perm:
+            raise ftplib.error_perm(
+                f"Unable to retrieve file data: {sys.exc_info()[1]}"
+            )
 
     def list_file_data(self, remote_dir: str) -> List[File]:
         """
@@ -173,7 +183,7 @@ class _ftpClient:
         try:
             with open(local_file, "wb") as f:
                 self.connection.retrbinary(f"RETR {remote_file}", f.write)
-        except OSError:
+        except (OSError, ftplib.error_reply):
             raise
 
     def upload_file(self, file: str, remote_dir: str, local_dir: str) -> File:
@@ -229,7 +239,7 @@ class _sftpClient:
             port: port number for server
 
         """
-        self.connection = self.__create_sftp_connection(
+        self.connection = self._create_sftp_connection(
             username=username, password=password, host=host, port=int(port)
         )
 
@@ -249,7 +259,7 @@ class _sftpClient:
         """
         self.connection.close()
 
-    def __create_sftp_connection(
+    def _create_sftp_connection(
         self, username: str, password: str, host: str, port: int
     ) -> paramiko.SFTPClient:
         """

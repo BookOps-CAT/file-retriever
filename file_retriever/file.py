@@ -73,7 +73,7 @@ class File:
         )
 
     @staticmethod
-    def parse_permissions(permissions: str) -> int:
+    def parse_permissions(permissions_str: str) -> int:
         """
         parse permissions string to decimal value.
 
@@ -91,9 +91,9 @@ class File:
                         (filetype * 8^5) + (0 * 8^4) + (0 * 8^3) + (owner * 8^2) +
                         (group * 8^1) + (others * 8^0) = decimal value
         """
-        file_type = permissions[0].replace("d", "4").replace("-", "1")
+        file_type = permissions_str[0].replace("d", "4").replace("-", "1")
         file_perm = (
-            permissions[1:10]
+            permissions_str[1:10]
             .replace("-", "0")
             .replace("r", "4")
             .replace("w", "2")
