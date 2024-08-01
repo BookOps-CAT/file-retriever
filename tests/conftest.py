@@ -151,17 +151,6 @@ def mock_client(monkeypatch):
 
 
 @pytest.fixture
-def stub_sftp_client(monkeypatch, mock_open_file, mock_client):
-    def mock_sftp_client(*args, **kwargs):
-        return MockSFTPClient()
-
-    monkeypatch.setattr(_sftpClient, "_create_sftp_connection", mock_sftp_client)
-    monkeypatch.setattr(paramiko.SFTPClient, "get", mock_sftp_client)
-    monkeypatch.setattr(paramiko.SFTPClient, "listdir_attr", mock_sftp_client)
-    monkeypatch.setattr(paramiko.SFTPClient, "put", mock_sftp_client)
-
-
-@pytest.fixture
 def mock_open_file(mocker):
     m = mocker.mock_open()
     mocker.patch("builtins.open", m)
