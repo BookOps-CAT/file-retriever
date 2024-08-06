@@ -41,9 +41,9 @@ class Client:
         self.port = port
         self.remote_dir = remote_dir
 
-        self.session = self.__create_client(username=username, password=password)
+        self.session = self.__connect_to_server(username=username, password=password)
 
-    def __create_client(
+    def __connect_to_server(
         self, username: str, password: str
     ) -> Union[_ftpClient, _sftpClient]:
         match self.port:
