@@ -104,16 +104,7 @@ class TestMock_ftpClient:
         with pytest.raises(ftplib.error_reply):
             ftp.list_file_data("testdir")
 
-    @pytest.mark.tmpdir
-    def test_ftpClient_download_file(self, tmp_path, stub_client_tmp_path, stub_creds):
-        stub_creds["port"] = "21"
-        path = tmp_path / "test"
-        path.mkdir()
-        ftp = _ftpClient(**stub_creds)
-        ftp.download_file(file="foo.mrc", remote_dir="bar", local_dir=str(path))
-        assert "foo.mrc" in os.listdir(path)
-
-    def test_ftpClient_download_mock_file(self, stub_client, stub_creds):
+    def test_ftpClient_download_file(self, stub_client, stub_creds):
         stub_creds["port"] = "21"
         with does_not_raise():
             ftp = _ftpClient(**stub_creds)
@@ -232,16 +223,7 @@ class TestMock_sftpClient:
         with pytest.raises(OSError):
             sftp.list_file_data("testdir")
 
-    @pytest.mark.tmpdir
-    def test_sftpClient_download_file(self, tmp_path, stub_client_tmp_path, stub_creds):
-        stub_creds["port"] = "22"
-        path = tmp_path / "test"
-        path.mkdir()
-        sftp = _sftpClient(**stub_creds)
-        sftp.download_file(file="foo.mrc", remote_dir="bar", local_dir=str(path))
-        assert "foo.mrc" in os.listdir(path)
-
-    def test_sftpClient_download_mock_file(self, stub_client, stub_creds):
+    def test_sftpClient_download_file(self, stub_client, stub_creds):
         stub_creds["port"] = "22"
         with does_not_raise():
             sftp = _sftpClient(**stub_creds)

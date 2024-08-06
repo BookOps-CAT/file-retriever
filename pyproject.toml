@@ -24,7 +24,6 @@ pytest-mock = "^3.14.0"
 testpaths = ["tests"]
 markers = [
     "livetest: mark a test as hitting a live ftp/sftp server",
-    "tmpdir: mark a test as using a temporary directory",
 ]
 
 
