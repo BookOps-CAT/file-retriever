@@ -22,9 +22,9 @@ class TestMock_ftpClient:
             assert client.connection is not None
 
     @pytest.mark.parametrize("port", [None, [], {}])
-    def test_ftpClient_port_TypeError(self, stub_client, stub_creds, port):
+    def test_ftpClient_port_ValueError(self, stub_client, stub_creds, port):
         stub_creds["port"] = port
-        with pytest.raises(TypeError):
+        with pytest.raises(ValueError):
             _ftpClient(**stub_creds)
 
     def test_ftpClient_no_creds(self, stub_client):
@@ -80,10 +80,10 @@ class TestMock_ftpClient:
         with pytest.raises(ftplib.error_perm):
             ftp.get_remote_file_data("foo.mrc", "testdir")
 
-    def test_ftpClient_list_file_data(self, stub_client, stub_creds):
+    def test_ftpClient_list_remote_file_data(self, stub_client, stub_creds):
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
-        files = ftp.list_file_data("testdir")
+        files = ftp.list_remote_file_data("testdir")
         assert files == [
             File(
                 file_name="foo.mrc",
@@ -96,13 +96,13 @@ class TestMock_ftpClient:
             )
         ]
 
-    def test_ftpClient_list_file_data_connection_error(
+    def test_ftpClient_list_remote_file_data_connection_error(
         self, mock_connection_error_reply, stub_creds
     ):
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
         with pytest.raises(ftplib.error_reply):
-            ftp.list_file_data("testdir")
+            ftp.list_remote_file_data("testdir")
 
     def test_ftpClient_download_file(self, stub_client, stub_creds):
         stub_creds["port"] = "21"
@@ -154,9 +154,9 @@ class TestMock_sftpClient:
         assert sftp.connection is not None
 
     @pytest.mark.parametrize("port", [None, [], {}])
-    def test_sftpClient_port_TypeError(self, mock_client, stub_creds, port):
+    def test_sftpClient_port_ValueError(self, mock_client, stub_creds, port):
         stub_creds["port"] = port
-        with pytest.raises(TypeError):
+        with pytest.raises(ValueError):
             _sftpClient(**stub_creds)
 
     def test_sftpClient_no_creds(self, mock_client):
@@ -201,10 +201,10 @@ class TestMock_sftpClient:
         with pytest.raises(OSError):
             sftp.get_remote_file_data("foo.mrc", "testdir")
 
-    def test_sftpClient_list_file_data(self, stub_client, stub_creds):
+    def test_sftpClient_list_remote_file_data(self, stub_client, stub_creds):
         stub_creds["port"] = "22"
         ftp = _sftpClient(**stub_creds)
-        files = ftp.list_file_data("testdir")
+        files = ftp.list_remote_file_data("testdir")
         assert files == [
             File(
                 file_name="foo.mrc",
@@ -217,11 +217,13 @@ class TestMock_sftpClient:
             )
         ]
 
-    def test_sftpClient_list_file_data_not_found(self, mock_file_error, stub_creds):
+    def test_sftpClient_list_remote_file_data_not_found(
+        self, mock_file_error, stub_creds
+    ):
         stub_creds["port"] = "22"
         sftp = _sftpClient(**stub_creds)
         with pytest.raises(OSError):
-            sftp.list_file_data("testdir")
+            sftp.list_remote_file_data("testdir")
 
     def test_sftpClient_download_file(self, stub_client, stub_creds):
         stub_creds["port"] = "22"
@@ -254,7 +256,7 @@ class TestLiveClients:
         remote_dir = live_ftp_creds["remote_dir"]
         del live_ftp_creds["remote_dir"], live_ftp_creds["vendor"]
         live_ftp = _ftpClient(**live_ftp_creds)
-        files = live_ftp.list_file_data(remote_dir)
+        files = live_ftp.list_remote_file_data(remote_dir)
         file_names = [file.file_name for file in files]
         file_data = live_ftp.get_remote_file_data("Sample_Full_RDA.mrc", remote_dir)
         assert "Sample_Full_RDA.mrc" in file_names
@@ -281,7 +283,7 @@ class TestLiveClients:
         remote_dir = live_sftp_creds["remote_dir"]
         del live_sftp_creds["remote_dir"], live_sftp_creds["vendor"]
         live_sftp = _sftpClient(**live_sftp_creds)
-        files = live_sftp.list_file_data(remote_dir)
+        files = live_sftp.list_remote_file_data(remote_dir)
         file_data = live_sftp.get_remote_file_data("20049552_NYPL.mrc", remote_dir)
         assert datetime.datetime.fromtimestamp(
             files[0].file_mtime
@@ -308,7 +310,7 @@ class TestLiveClients:
             if k != "remote_dir" and k != "vendor"
         }
         ev_sftp = _sftpClient(**ev_creds)
-        ev_files = ev_sftp.list_file_data(ev_remote_dir)
+        ev_files = ev_sftp.list_remote_file_data(ev_remote_dir)
         ev_sftp.download_file(ev_files[0].file_name, ev_remote_dir, local_test_dir)
         nsdrop_sftp = _sftpClient(**NSDROP_creds)
         nsdrop_file = nsdrop_sftp.upload_file(

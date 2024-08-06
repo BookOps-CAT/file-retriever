@@ -51,15 +51,6 @@ class Mock_SFTPAttributes(paramiko.SFTPAttributes):
 class MockFTP:
     """Mock response from FTP server for a successful login"""
 
-    def __init__(self, *args, **kwargs):
-        pass
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args) -> None:
-        self.close()
-
     def close(self, *args, **kwargs) -> None:
         pass
 
@@ -89,15 +80,6 @@ class MockFTP:
 class MockSFTPClient:
     """Mock response from SFTP for a successful login"""
 
-    def __init__(self):
-        pass
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args) -> None:
-        self.close()
-
     def close(self, *args, **kwargs) -> None:
         pass
 
@@ -112,22 +94,6 @@ class MockSFTPClient:
 
     def stat(self, *args, **kwargs) -> paramiko.SFTPAttributes:
         return Mock_SFTPAttributes()
-
-
-class MockSSHClient:
-    """Mock response from SSH for a successful login"""
-
-    def __init__(self):
-        pass
-
-    def connect(self, *args, **kwargs) -> None:
-        pass
-
-    def open_sftp(self, *args, **kwargs) -> MockSFTPClient:
-        return MockSFTPClient()
-
-    def set_missing_host_key_policy(self, *args, **kwargs) -> None:
-        pass
 
 
 @pytest.fixture
@@ -168,8 +134,8 @@ def stub_client(monkeypatch, mock_open_file, mock_client):
     def mock_file_not_found(*args, **kwargs):
         return False
 
-    monkeypatch.setattr(_ftpClient, "_create_ftp_connection", mock_ftp_client)
-    monkeypatch.setattr(_sftpClient, "_create_sftp_connection", mock_sftp_client)
+    monkeypatch.setattr(_ftpClient, "_connect_to_server", mock_ftp_client)
+    monkeypatch.setattr(_sftpClient, "_connect_to_server", mock_sftp_client)
     monkeypatch.setattr(Client, "check_file", mock_file_not_found)
 
 
@@ -181,8 +147,8 @@ def stub_client_tmp_path(monkeypatch, mock_client):
     def mock_sftp_client(*args, **kwargs):
         return MockSFTPClient()
 
-    monkeypatch.setattr(_ftpClient, "_create_ftp_connection", mock_ftp_client)
-    monkeypatch.setattr(_sftpClient, "_create_sftp_connection", mock_sftp_client)
+    monkeypatch.setattr(_ftpClient, "_connect_to_server", mock_ftp_client)
+    monkeypatch.setattr(_sftpClient, "_connect_to_server", mock_sftp_client)
 
 
 @pytest.fixture
@@ -202,10 +168,8 @@ def stub_client_file_exists(monkeypatch, mock_open_file, mock_client):
         return True
 
     monkeypatch.setattr(os.path, "exists", path_exists)
-    monkeypatch.setattr(_ftpClient, "_create_ftp_connection", mock_ftp_client)
-    monkeypatch.setattr(_sftpClient, "_create_sftp_connection", mock_sftp_client)
-    # monkeypatch.setattr(_ftpClient, "get_remote_file_data", mock_file_exists)
-    # monkeypatch.setattr(_sftpClient, "get_remote_file_data", mock_file_exists)
+    monkeypatch.setattr(_ftpClient, "_connect_to_server", mock_ftp_client)
+    monkeypatch.setattr(_sftpClient, "_connect_to_server", mock_sftp_client)
 
 
 class MockOSError:

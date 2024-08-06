@@ -122,7 +122,7 @@ class Client:
         if not remote_dir or remote_dir is None:
             remote_dir = self.remote_dir
         with self.session as session:
-            files = session.list_file_data(remote_dir)
+            files = session.list_remote_file_data(remote_dir)
             if time_delta > 0:
                 return [
                     i
