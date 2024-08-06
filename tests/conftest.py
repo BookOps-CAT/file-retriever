@@ -5,7 +5,7 @@ import paramiko
 from typing import Dict, List
 import yaml
 import pytest
-from file_retriever._clients import _ftpClient, _sftpClient
+from file_retriever._clients import _ftpClient, _sftpClient, _BaseClient
 from file_retriever.connect import Client
 
 
@@ -92,6 +92,21 @@ class MockSFTPClient:
 
     def stat(self, *args, **kwargs) -> paramiko.SFTPAttributes:
         return MockFileData().create_SFTPAttributes()
+
+
+class MockABCClient:
+    """Mock response from SFTP for a successful login"""
+
+    def close(self, *args, **kwargs) -> None:
+        pass
+
+
+@pytest.fixture
+def mock_BaseClient(monkeypatch):
+    def mock_bc(*args, **kwargs):
+        return MockABCClient()
+
+    monkeypatch.setattr(_BaseClient, "_connect_to_server", mock_bc)
 
 
 @pytest.fixture

@@ -4,8 +4,28 @@ import ftplib
 import os
 import paramiko
 import pytest
-from file_retriever._clients import _ftpClient, _sftpClient
+from file_retriever._clients import _ftpClient, _sftpClient, _BaseClient
 from file_retriever.file import File
+
+
+def test_BaseClient():
+    _BaseClient.__abstractmethods__ = set()
+    ftp_bc = _BaseClient(username="foo", password="bar", host="baz", port=21)
+    assert ftp_bc.__dict__ == {"connection": None}
+    assert ftp_bc.get_remote_file_data("foo.mrc", "bar") is None
+    assert ftp_bc.list_remote_file_data("foo") is None
+    assert ftp_bc.download_file("foo.mrc", "bar", "baz") is None
+    assert ftp_bc.upload_file("foo.mrc", "bar", "baz") is None
+
+
+def test_BaseClient_context_manager(mock_BaseClient):
+    _BaseClient.__abstractmethods__ = set()
+    with _BaseClient(username="foo", password="bar", host="baz", port=22) as sftp_bc:
+        assert sftp_bc.connection is not None
+        assert sftp_bc.get_remote_file_data("foo.mrc", "bar") is None
+        assert sftp_bc.list_remote_file_data("foo") is None
+        assert sftp_bc.download_file("foo.mrc", "bar", "baz") is None
+        assert sftp_bc.upload_file("foo.mrc", "bar", "baz") is None
 
 
 class TestMock_ftpClient:
