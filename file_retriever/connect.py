@@ -38,23 +38,23 @@ class Client:
 
         self.vendor = vendor
         self.host = host
-        self.port = int(port)
+        self.port = port
         self.remote_dir = remote_dir
 
-        self.session = self._create_client(username=username, password=password)
+        self.session = self.__create_client(username=username, password=password)
 
-    def _create_client(
+    def __create_client(
         self, username: str, password: str
     ) -> Union[_ftpClient, _sftpClient]:
         match self.port:
-            case 21:
+            case 21 | "21":
                 return _ftpClient(
                     username=username,
                     password=password,
                     host=self.host,
                     port=self.port,
                 )
-            case 22:
+            case 22 | "22":
                 return _sftpClient(
                     username=username,
                     password=password,
@@ -84,24 +84,24 @@ class Client:
             else:
                 return os.path.exists(os.path.join(check_dir, file))
 
-    def get_file_data(self, file: str, remote_dir: Optional[str] = None) -> List[File]:
+    def get_file_data(self, file: str, remote_dir: Optional[str] = None) -> File:
         """
-        Retrieve metadata for file in `remote_dir` on server. If `remote_dir` is not
-        provided then data for file in `self.remote_dir` will be retrieved.
+        Retrieve metadata for `file` in `remote_dir` on server. If `remote_dir` is not
+        provided then data for `file` in `self.remote_dir` will be retrieved.
 
         Args:
             file: name of file to retrieve metadata for
             remote_dir: directory on server to interact with
 
         Returns:
-            files in `remote_dir` represented as `File` object
+            file in `remote_dir` represented as `File` object
         """
         if not remote_dir or remote_dir is None:
             remote_dir = self.remote_dir
         with self.session as session:
             return session.get_remote_file_data(file, remote_dir)
 
-    def list_files(
+    def list_files_in_dir(
         self, time_delta: int = 0, remote_dir: Optional[str] = None
     ) -> List[File]:
         """

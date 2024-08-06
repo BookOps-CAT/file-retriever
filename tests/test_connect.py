@@ -134,15 +134,15 @@ class TestMockClient:
             connect.get_file_data("foo.mrc", "testdir")
 
     @pytest.mark.parametrize("port, uid_gid", [(21, None), (22, 0)])
-    def test_Client_list_files(self, stub_client, stub_creds, port, uid_gid):
+    def test_Client_list_files_in_dir(self, stub_client, stub_creds, port, uid_gid):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
             stub_creds["vendor"],
         ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
-        all_files = connect.list_files()
-        recent_files = connect.list_files(time_delta=5, remote_dir="testdir")
+        all_files = connect.list_files_in_dir()
+        recent_files = connect.list_files_in_dir(time_delta=5, remote_dir="testdir")
         assert all_files == [
             File(
                 file_name="foo.mrc",
@@ -166,7 +166,7 @@ class TestMockClient:
         ) = (21, "testdir", "test")
         connect = Client(**stub_creds)
         with pytest.raises(ftplib.error_reply):
-            connect.list_files()
+            connect.list_files_in_dir()
 
     def test_Client_list_sftp_file_not_found(self, mock_file_error, stub_creds):
         (
@@ -176,7 +176,7 @@ class TestMockClient:
         ) = (22, "testdir", "test")
         connect = Client(**stub_creds)
         with pytest.raises(OSError):
-            connect.list_files()
+            connect.list_files_in_dir()
 
     @pytest.mark.parametrize(
         "port, dir",
@@ -356,7 +356,7 @@ class TestMockClient:
 @pytest.mark.livetest
 def test_Client_ftp_live_test(live_ftp_creds):
     live_ftp = Client(**live_ftp_creds)
-    files = live_ftp.list_files()
+    files = live_ftp.list_files_in_dir()
     assert len(files) > 1
     assert "220" in live_ftp.session.connection.getwelcome()
 
@@ -364,6 +364,6 @@ def test_Client_ftp_live_test(live_ftp_creds):
 @pytest.mark.livetest
 def test_Client_sftp_live_test(live_sftp_creds):
     live_sftp = Client(**live_sftp_creds)
-    files = live_sftp.list_files()
+    files = live_sftp.list_files_in_dir()
     assert len(files) > 1
     assert live_sftp.session.connection.get_channel().active == 1
