@@ -27,6 +27,12 @@ class MockFileData:
         self.st_uid = 0
         self.st_size = 140401
 
+    def create_SFTPAttributes(self):
+        sftp_attr = paramiko.SFTPAttributes()
+        sftp_attr.__dict__ = self.__dict__
+        sftp_attr.filename = self.file_name
+        return sftp_attr
+
 
 @pytest.fixture
 def mock_file_data(monkeypatch):
@@ -36,16 +42,11 @@ def mock_file_data(monkeypatch):
     monkeypatch.setattr(os, "stat", mock_stat)
 
 
-class Mock_SFTPAttributes(paramiko.SFTPAttributes):
-
-    def __init__(self):
-        self.filename = "foo.mrc"
-        self.st_mtime = 1704070800
-        self.st_size = 140401
-        self.st_uid = 0
-        self.st_gid = 0
-        self.st_mode = 33188
-        self.st_atime = None
+@pytest.fixture
+def mock_open_file(mocker):
+    m = mocker.mock_open()
+    mocker.patch("builtins.open", m)
+    return m
 
 
 class MockFTP:
@@ -53,9 +54,6 @@ class MockFTP:
 
     def close(self, *args, **kwargs) -> None:
         pass
-
-    def getwelcome(self, *args, **kwargs) -> str:
-        return "220 (vsFTPd 3.0.5)"
 
     def nlst(self, *args, **kwargs) -> List[str]:
         return ["foo.mrc"]
@@ -87,28 +85,20 @@ class MockSFTPClient:
         open(args[1], "x+")
 
     def listdir_attr(self, *args, **kwargs) -> List[paramiko.SFTPAttributes]:
-        return [Mock_SFTPAttributes()]
+        return [MockFileData().create_SFTPAttributes()]
 
     def put(self, *args, **kwargs) -> paramiko.SFTPAttributes:
-        return Mock_SFTPAttributes()
+        return MockFileData().create_SFTPAttributes()
 
     def stat(self, *args, **kwargs) -> paramiko.SFTPAttributes:
-        return Mock_SFTPAttributes()
+        return MockFileData().create_SFTPAttributes()
 
 
 @pytest.fixture
-def mock_client(monkeypatch):
+def stub_client(monkeypatch):
     def mock_login(*args, **kwargs):
         pass
 
-    def mock_file_data(*args, **kwargs):
-        return MockFileData()
-
-    def mock_file_exists(*args, **kwargs):
-        return False
-
-    monkeypatch.setattr(os.path, "exists", mock_file_exists)
-    monkeypatch.setattr(os, "stat", mock_file_data)
     monkeypatch.setattr(ftplib.FTP, "login", mock_login)
     monkeypatch.setattr(ftplib.FTP, "connect", mock_login)
     monkeypatch.setattr(paramiko.SSHClient, "connect", mock_login)
@@ -117,123 +107,60 @@ def mock_client(monkeypatch):
 
 
 @pytest.fixture
-def mock_open_file(mocker):
-    m = mocker.mock_open()
-    mocker.patch("builtins.open", m)
-    return m
-
-
-@pytest.fixture
-def stub_client(monkeypatch, mock_open_file, mock_client):
+def mock_ftpClient_sftpClient(monkeypatch, mock_open_file, stub_client):
     def mock_ftp_client(*args, **kwargs):
         return MockFTP()
 
     def mock_sftp_client(*args, **kwargs):
         return MockSFTPClient()
 
-    def mock_file_not_found(*args, **kwargs):
+    monkeypatch.setattr(_ftpClient, "_connect_to_server", mock_ftp_client)
+    monkeypatch.setattr(_sftpClient, "_connect_to_server", mock_sftp_client)
+
+
+@pytest.fixture
+def mock_Client(monkeypatch, mock_ftpClient_sftpClient, mock_file_data):
+    def mock_file_exists(*args, **kwargs):
         return False
 
-    monkeypatch.setattr(_ftpClient, "_connect_to_server", mock_ftp_client)
-    monkeypatch.setattr(_sftpClient, "_connect_to_server", mock_sftp_client)
-    monkeypatch.setattr(Client, "check_file", mock_file_not_found)
+    monkeypatch.setattr(os.path, "exists", mock_file_exists)
+    monkeypatch.setattr(Client, "check_file", mock_file_exists)
 
 
 @pytest.fixture
-def stub_client_tmp_path(monkeypatch, mock_client):
-    def mock_ftp_client(*args, **kwargs):
-        return MockFTP()
-
-    def mock_sftp_client(*args, **kwargs):
-        return MockSFTPClient()
-
-    monkeypatch.setattr(_ftpClient, "_connect_to_server", mock_ftp_client)
-    monkeypatch.setattr(_sftpClient, "_connect_to_server", mock_sftp_client)
-
-
-@pytest.fixture
-def stub_client_file_exists(monkeypatch, mock_open_file, mock_client):
-    def mock_ftp_client(*args, **kwargs):
-        return MockFTP()
-
-    def mock_sftp_client(*args, **kwargs):
-        return MockSFTPClient()
-
-    def mock_file_exists(*args, **kwargs):
-        file = MockFileData()
-        file.file_name = "bar.mrc"
-        return file
-
+def mock_Client_file_exists(monkeypatch, mock_ftpClient_sftpClient):
     def path_exists(*args, **kwargs):
         return True
 
     monkeypatch.setattr(os.path, "exists", path_exists)
-    monkeypatch.setattr(_ftpClient, "_connect_to_server", mock_ftp_client)
-    monkeypatch.setattr(_sftpClient, "_connect_to_server", mock_sftp_client)
-
-
-class MockOSError:
-
-    def __init__(self):
-        raise OSError
-
-
-class MockAuthenticationException:
-
-    def __init__(self):
-        raise paramiko.AuthenticationException
-
-
-class MockErrorPerm:
-
-    def __init__(self):
-        raise ftplib.error_perm
-
-
-class MockSSHException:
-
-    def __init__(self):
-        raise paramiko.SSHException
-
-
-class MockErrorTemp:
-
-    def __init__(self):
-        raise ftplib.error_temp
-
-
-class MockErrorReply:
-
-    def __init__(self):
-        raise ftplib.error_reply
 
 
 @pytest.fixture
-def mock_auth_error(monkeypatch, mock_client):
+def mock_auth_error(monkeypatch, stub_client):
     def mock_ssh_auth_error(*args, **kwargs):
-        return MockAuthenticationException()
+        raise paramiko.AuthenticationException
 
     def mock_ftp_error_perm(*args, **kwargs):
-        return MockErrorPerm()
+        raise ftplib.error_perm
 
     monkeypatch.setattr(ftplib.FTP, "login", mock_ftp_error_perm)
     monkeypatch.setattr(paramiko.SSHClient, "connect", mock_ssh_auth_error)
 
 
 @pytest.fixture
-def mock_login_connection_error(monkeypatch, mock_client):
-    def mock_ftp_error_perm(*args, **kwargs):
-        return MockErrorTemp()
+def mock_login_connection_error(monkeypatch, stub_client):
+    def mock_ftp_error_temp(*args, **kwargs):
+        raise ftplib.error_temp
 
     def mock_ssh_error(*args, **kwargs):
-        return MockSSHException()
+        raise paramiko.SSHException
 
     monkeypatch.setattr(paramiko.SSHClient, "connect", mock_ssh_error)
-    monkeypatch.setattr(ftplib.FTP, "login", mock_ftp_error_perm)
+    monkeypatch.setattr(ftplib.FTP, "login", mock_ftp_error_temp)
 
 
 @pytest.fixture
-def mock_permissions_error(monkeypatch, mock_open_file, mock_client):
+def mock_permissions_error(monkeypatch, mock_open_file, stub_client):
     def mock_retrlines(*args, **kwargs):
         return None
 
@@ -241,12 +168,12 @@ def mock_permissions_error(monkeypatch, mock_open_file, mock_client):
 
 
 @pytest.fixture
-def mock_file_error(monkeypatch, mock_open_file, stub_client):
+def mock_file_error(monkeypatch, mock_open_file, mock_ftpClient_sftpClient):
     def mock_os_error(*args, **kwargs):
-        return MockOSError()
+        raise OSError
 
     def mock_ftp_error_perm(*args, **kwargs):
-        return MockErrorPerm()
+        raise ftplib.error_perm
 
     def mock_retrlines(*args, **kwargs):
         return None
@@ -263,9 +190,9 @@ def mock_file_error(monkeypatch, mock_open_file, stub_client):
 
 
 @pytest.fixture
-def mock_connection_error_reply(monkeypatch, mock_open_file, mock_client):
+def mock_connection_error_reply(monkeypatch, mock_open_file, stub_client):
     def mock_ftp_error_reply(*args, **kwargs):
-        return MockErrorReply()
+        raise ftplib.error_reply
 
     monkeypatch.setattr(ftplib.FTP, "storbinary", mock_ftp_error_reply)
     monkeypatch.setattr(ftplib.FTP, "retrbinary", mock_ftp_error_reply)

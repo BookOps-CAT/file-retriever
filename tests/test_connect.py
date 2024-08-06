@@ -20,7 +20,7 @@ class TestMockClient:
             ),
         ],
     )
-    def test_Client(self, stub_client, stub_creds, port, client_type):
+    def test_Client(self, mock_Client, stub_creds, port, client_type):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
@@ -33,7 +33,7 @@ class TestMockClient:
         assert connect.remote_dir == "testdir"
         assert isinstance(connect.session, client_type)
 
-    def test_Client_invalid_port(self, stub_client, stub_creds):
+    def test_Client_invalid_port(self, mock_Client, stub_creds):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
@@ -65,7 +65,7 @@ class TestMockClient:
         "port",
         [21, 22],
     )
-    def test_Client_check_file_local(self, stub_client_file_exists, stub_creds, port):
+    def test_Client_check_file_local(self, mock_Client_file_exists, stub_creds, port):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
@@ -79,7 +79,7 @@ class TestMockClient:
         "port",
         [21, 22],
     )
-    def test_Client_check_file_remote(self, stub_client_file_exists, stub_creds, port):
+    def test_Client_check_file_remote(self, mock_Client_file_exists, stub_creds, port):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
@@ -93,7 +93,7 @@ class TestMockClient:
         "port, dir, uid_gid",
         [(21, "testdir", None), (21, None, None), (22, "testdir", 0), (22, None, 0)],
     )
-    def test_Client_get_file_data(self, stub_client, stub_creds, port, dir, uid_gid):
+    def test_Client_get_file_data(self, mock_Client, stub_creds, port, dir, uid_gid):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
@@ -134,7 +134,7 @@ class TestMockClient:
             connect.get_file_data("foo.mrc", "testdir")
 
     @pytest.mark.parametrize("port, uid_gid", [(21, None), (22, 0)])
-    def test_Client_list_files_in_dir(self, stub_client, stub_creds, port, uid_gid):
+    def test_Client_list_files_in_dir(self, mock_Client, stub_creds, port, uid_gid):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
@@ -182,7 +182,7 @@ class TestMockClient:
         "port, dir",
         [(21, "testdir"), (21, None), (22, "testdir"), (22, None)],
     )
-    def test_Client_get_file(self, stub_client, stub_creds, port, dir):
+    def test_Client_get_file(self, mock_Client, stub_creds, port, dir):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
@@ -220,7 +220,7 @@ class TestMockClient:
         [21, 22],
     )
     def test_Client_get_check_file_exists_true(
-        self, stub_client_file_exists, stub_creds, port
+        self, mock_Client_file_exists, stub_creds, port
     ):
         (
             stub_creds["port"],
@@ -236,7 +236,7 @@ class TestMockClient:
         [(21, "testdir"), (21, None), (22, "testdir"), (22, None)],
     )
     def test_Client_get_check_file_exists_false(
-        self, stub_client, stub_creds, port, dir
+        self, mock_Client, stub_creds, port, dir
     ):
         (
             stub_creds["port"],
@@ -261,7 +261,7 @@ class TestMockClient:
         "port, dir, uid_gid",
         [(21, None, None), (21, "test", None), (22, None, 0), (22, "test", 0)],
     )
-    def test_Client_put_file(self, stub_client, stub_creds, port, dir, uid_gid):
+    def test_Client_put_file(self, mock_Client, stub_creds, port, dir, uid_gid):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
@@ -313,7 +313,7 @@ class TestMockClient:
         [21, 22],
     )
     def test_Client_put_check_file_exists_true(
-        self, stub_client_file_exists, stub_creds, port
+        self, mock_Client_file_exists, stub_creds, port
     ):
         (
             stub_creds["port"],
@@ -331,7 +331,7 @@ class TestMockClient:
         [(21, None), (22, 0)],
     )
     def test_Client_put_check_file_exists_false(
-        self, stub_client, stub_creds, port, uid_gid
+        self, mock_Client, stub_creds, port, uid_gid
     ):
         (
             stub_creds["port"],
