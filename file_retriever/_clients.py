@@ -5,6 +5,7 @@ Can be used to connect to vendor servers or internal network drives.
 
 """
 
+from abc import ABC, abstractmethod
 import ftplib
 import os
 import paramiko
@@ -14,7 +15,53 @@ from typing import List, Union, Optional
 from file_retriever.file import File
 
 
-class _ftpClient:
+class _BaseClient(ABC):
+    """"""
+
+    @abstractmethod
+    def __init__(self, username: str, password: str, host: str, port: Union[str, int]):
+        self.connection: Union[ftplib.FTP, paramiko.SFTPClient] = (
+            self._connect_to_server(
+                username=username, password=password, host=host, port=int(port)
+            )
+        )
+
+    @abstractmethod
+    def __enter__(self, *args):
+        return self
+
+    @abstractmethod
+    def __exit__(self, *args):
+        self.connection.close()
+
+    @abstractmethod
+    def _connect_to_server(
+        self,
+        username: str,
+        password: str,
+        host: str,
+        port: int,
+    ) -> Union[ftplib.FTP, paramiko.SFTPClient]:
+        pass
+
+    @abstractmethod
+    def get_remote_file_data(self, file: str, remote_dir: str) -> File:
+        pass
+
+    @abstractmethod
+    def list_remote_file_data(self, remote_dir: str) -> List[File]:
+        pass
+
+    @abstractmethod
+    def download_file(self, file: str, remote_dir: str, local_dir: str) -> None:
+        pass
+
+    @abstractmethod
+    def upload_file(self, file: str, remote_dir: str, local_dir: str) -> File:
+        pass
+
+
+class _ftpClient(_BaseClient):
     """
     An FTP client to use when interacting with remote storage. Supports
     interactions with servers via the `ftplib` library.
@@ -36,7 +83,9 @@ class _ftpClient:
             port: port number for server
 
         """
-        self.connection = self._create_ftp_connection(
+        if port not in [21, "21"]:
+            raise ValueError("Invalid port number for FTP connection.")
+        self.connection: ftplib.FTP = self._connect_to_server(
             username=username, password=password, host=host, port=int(port)
         )
 
@@ -56,7 +105,7 @@ class _ftpClient:
         """
         self.connection.close()
 
-    def _create_ftp_connection(
+    def _connect_to_server(
         self, username: str, password: str, host: str, port: int
     ) -> ftplib.FTP:
         """
@@ -135,7 +184,7 @@ class _ftpClient:
                 f"Unable to retrieve file data: {sys.exc_info()[1]}"
             )
 
-    def list_file_data(self, remote_dir: str) -> List[File]:
+    def list_remote_file_data(self, remote_dir: str) -> List[File]:
         """
         Retrieves metadata for each file in `remote_dir` on server.
 
@@ -217,7 +266,7 @@ class _ftpClient:
             raise
 
 
-class _sftpClient:
+class _sftpClient(_BaseClient):
     """
     An SFTP client to use when interacting with remote storage. Supports
     interactions with servers via the `paramiko` library.
@@ -239,7 +288,9 @@ class _sftpClient:
             port: port number for server
 
         """
-        self.connection = self._create_sftp_connection(
+        if port not in [22, "22"]:
+            raise ValueError("Invalid port number for SFTP connection.")
+        self.connection: paramiko.SFTPClient = self._connect_to_server(
             username=username, password=password, host=host, port=int(port)
         )
 
@@ -259,7 +310,7 @@ class _sftpClient:
         """
         self.connection.close()
 
-    def _create_sftp_connection(
+    def _connect_to_server(
         self, username: str, password: str, host: str, port: int
     ) -> paramiko.SFTPClient:
         """
@@ -311,7 +362,7 @@ class _sftpClient:
         except OSError:
             raise
 
-    def list_file_data(self, remote_dir: str) -> List[File]:
+    def list_remote_file_data(self, remote_dir: str) -> List[File]:
         """
         Lists metadata for each file in `remote_dir` on server.
 
