@@ -1,16 +1,13 @@
-from collections import Counter
 import os
 import yaml
 
 
-def vendor_config(config_path: str):
-    vendors = []
+def vendor_config(config_path: str) -> None:
+    """Set environment variables from config file"""
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
         for k, v in config.items():
             os.environ[k] = v
-            vendors.append(f"{k.split('_')[0]}")
-    print(*Counter(vendors))
 
 
 def logger_config() -> dict:
