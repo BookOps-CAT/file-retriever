@@ -41,12 +41,6 @@ class TestMock_ftpClient:
         with _ftpClient(**stub_creds) as client:
             assert client.connection is not None
 
-    @pytest.mark.parametrize("port", [None, [], {}])
-    def test_ftpClient_port_ValueError(self, stub_client, stub_creds, port):
-        stub_creds["port"] = port
-        with pytest.raises(ValueError):
-            _ftpClient(**stub_creds)
-
     def test_ftpClient_no_creds(self, stub_client):
         creds = {}
         with pytest.raises(TypeError):
@@ -176,12 +170,6 @@ class TestMock_sftpClient:
         stub_creds["port"] = "22"
         sftp = _sftpClient(**stub_creds)
         assert sftp.connection is not None
-
-    @pytest.mark.parametrize("port", [None, [], {}])
-    def test_sftpClient_port_ValueError(self, stub_client, stub_creds, port):
-        stub_creds["port"] = port
-        with pytest.raises(ValueError):
-            _sftpClient(**stub_creds)
 
     def test_sftpClient_no_creds(self, stub_client):
         creds = {}

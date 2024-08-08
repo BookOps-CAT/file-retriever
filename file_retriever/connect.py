@@ -4,9 +4,13 @@ ftp or sftp client.
 """
 
 import datetime
+import logging
 import os
-from typing import List, Optional, Literal, Union
-from file_retriever._clients import _ftpClient, _sftpClient, File
+from typing import List, Optional, Union
+from file_retriever._clients import _ftpClient, _sftpClient
+from file_retriever.file import File
+
+logger = logging.getLogger("file_retriever")
 
 
 class Client:
@@ -22,7 +26,7 @@ class Client:
         username: str,
         password: str,
         host: str,
-        port: Literal[21, 22, "21", "22"],
+        port: Union[str, int],
         remote_dir: str,
     ):
         """Initializes client instance.
@@ -62,6 +66,7 @@ class Client:
                     port=self.port,
                 )
             case _:
+                logger.error(f"Invalid port number: {self.port}")
                 raise ValueError(f"Invalid port number: {self.port}")
 
     def check_file(self, file: str, check_dir: str, remote: bool) -> bool:
@@ -97,6 +102,7 @@ class Client:
             file in `remote_dir` represented as `File` object
         """
         if not remote_dir or remote_dir is None:
+            logger.debug(f"Param `remote_dir` not passed. Using {self.remote_dir}.")
             remote_dir = self.remote_dir
         with self.session as session:
             return session.get_remote_file_data(file, remote_dir)
@@ -120,10 +126,12 @@ class Client:
         today = datetime.datetime.now()
 
         if not remote_dir or remote_dir is None:
+            logger.debug(f"Param `remote_dir` not passed. Using {self.remote_dir}.")
             remote_dir = self.remote_dir
         with self.session as session:
             files = session.list_remote_file_data(remote_dir)
             if time_delta > 0:
+                logger.debug(f"Checking for files modified in last {time_delta} days.")
                 return [
                     i
                     for i in files
@@ -158,13 +166,18 @@ class Client:
             file downloaded to `local_dir` as `File` object
         """
         if not remote_dir or remote_dir is None:
+            logger.debug(f"Param `remote_dir` not passed. Using {self.remote_dir}.")
             remote_dir = self.remote_dir
         with self.session as session:
             if check and self.check_file(file, check_dir=local_dir, remote=False):
-                raise FileExistsError(
-                    f"File {file} already exists in {local_dir}. File not downloaded."
+                logger.error(
+                    f"{file} not downloaded to {local_dir} because it already exists."
                 )
-
+                raise FileExistsError
+            self.session.download_file(
+                file=file, remote_dir=remote_dir, local_dir=local_dir
+            )
+            logger.debug(f"{file} downloaded to {local_dir} directory")
             session.download_file(file=file, remote_dir=remote_dir, local_dir=local_dir)
 
         local_file = os.path.normpath(os.path.join(local_dir, file))
@@ -193,13 +206,16 @@ class Client:
             file uploaded to `remote_dir` as `File` object
         """
         if remote_dir is None:
+            logger.debug(f"Param `remote_dir` not passed. Using {self.remote_dir}.")
             remote_dir = self.remote_dir
         with self.session as session:
             if check and self.check_file(file, check_dir=remote_dir, remote=True):
-                raise FileExistsError(
-                    f"File {file} already exists in {remote_dir}. File not uploaded."
+                logger.error(
+                    f"{file} not uploaded to {remote_dir} because it already exists"
                 )
+                raise FileExistsError
             uploaded_file = session.upload_file(
                 file=file, remote_dir=remote_dir, local_dir=local_dir
             )
+            logger.debug(f"{file} uploaded from {local_dir} to {remote_dir} directory")
             return uploaded_file

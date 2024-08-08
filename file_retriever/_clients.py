@@ -7,12 +7,14 @@ Can be used to connect to vendor servers or internal network drives.
 
 from abc import ABC, abstractmethod
 import ftplib
+import logging
 import os
 import paramiko
 import sys
 from typing import List, Union, Optional
-
 from file_retriever.file import File
+
+logger = logging.getLogger("file_retriever")
 
 
 class _BaseClient(ABC):
@@ -83,11 +85,10 @@ class _ftpClient(_BaseClient):
             port: port number for server
 
         """
-        if port not in [21, "21"]:
-            raise ValueError("Invalid port number for FTP connection.")
-        self.connection: ftplib.FTP = self._connect_to_server(
-            username=username, password=password, host=host, port=int(port)
-        )
+        if port in [21, "21"]:
+            self.connection: ftplib.FTP = self._connect_to_server(
+                username=username, password=password, host=host, port=int(port)
+            )
 
     def __enter__(self, *args):
         """
@@ -118,6 +119,7 @@ class _ftpClient(_BaseClient):
             ftplib.error_temp: if unable to connect to server
             ftplib.error_perm: if unable to authenticate with server
         """
+        logger.debug(f"Connecting to {host} via FTP client")
         try:
             ftp_client = ftplib.FTP()
             ftp_client.connect(host=host, port=port)
@@ -126,13 +128,16 @@ class _ftpClient(_BaseClient):
                 user=username,
                 passwd=password,
             )
+            logger.debug(f"Connected at {port} to {host}")
             return ftp_client
         except ftplib.error_perm:
-            raise ftplib.error_perm(
-                "Unable to authenticate with server with provided credentials."
+            logger.error(
+                f"Unable to authenticate with provided credentials: {sys.exc_info()[1]}"
             )
+            raise
         except ftplib.error_temp:
-            raise ftplib.error_temp("Unable to connect to server.")
+            logger.error(f"Unable to connect to {host}: {sys.exc_info()[1]}")
+            raise
 
     def get_remote_file_data(self, file: str, remote_dir: Optional[str] = None) -> File:
         """
@@ -165,8 +170,9 @@ class _ftpClient(_BaseClient):
 
             self.connection.retrlines(f"LIST {remote_file}", get_file_permissions),
             if permissions is None:
+                logger.error(f"{file} not found on server.")
                 raise ftplib.error_perm("File not found on server.")
-
+            logger.debug(f"Retrieving file data for {remote_file}")
             return File(
                 file_name=file_name,
                 file_size=self.connection.size(remote_file),
@@ -176,13 +182,15 @@ class _ftpClient(_BaseClient):
                 file_mode=permissions,
             )
         except ftplib.error_reply:
-            raise ftplib.error_reply(
+            logger.error(
                 f"Received unexpected response from server: {sys.exc_info()[1]}"
             )
+            raise
         except ftplib.error_perm:
-            raise ftplib.error_perm(
-                f"Unable to retrieve file data: {sys.exc_info()[1]}"
+            logger.error(
+                f"Unable to retrieve file data for {file}: {sys.exc_info()[1]}"
             )
+            raise
 
     def list_remote_file_data(self, remote_dir: str) -> List[File]:
         """
@@ -206,7 +214,11 @@ class _ftpClient(_BaseClient):
                 file = self.get_remote_file_data(data)
                 files.append(file)
         except ftplib.error_reply:
+            logger.error(
+                f"Unable to retrieve file data for {remote_dir}: {sys.exc_info()[1]}"
+            )
             raise
+        logger.debug(f"Retrieved file data for {len(files)} files in {remote_dir}")
         return files
 
     def download_file(self, file: str, remote_dir: str, local_dir: str) -> None:
@@ -230,9 +242,18 @@ class _ftpClient(_BaseClient):
         local_file = os.path.normpath(os.path.join(local_dir, file))
         remote_file = os.path.normpath(os.path.join(remote_dir, file))
         try:
+            logger.debug(f"Downloading {remote_file} to {local_file} via FTP client")
             with open(local_file, "wb") as f:
                 self.connection.retrbinary(f"RETR {remote_file}", f.write)
-        except (OSError, ftplib.error_reply):
+        except OSError:
+            logger.error(
+                f"Unable to download {remote_file} to {local_file}: {sys.exc_info()[1]}"
+            )
+            raise
+        except ftplib.error_reply:
+            logger.error(
+                f"Received unexpected response from server: {sys.exc_info()[1]}"
+            )
             raise
 
     def upload_file(self, file: str, remote_dir: str, local_dir: str) -> File:
@@ -259,10 +280,19 @@ class _ftpClient(_BaseClient):
         local_file = os.path.normpath(os.path.join(local_dir, file))
         remote_file = os.path.normpath(os.path.join(remote_dir, file))
         try:
+            logger.debug(f"Uploading {local_file} to {remote_dir} via FTP client")
             with open(remote_file, "rb") as rf:
                 self.connection.storbinary(f"STOR {local_file}", rf)
             return self.get_remote_file_data(file, remote_dir)
-        except (OSError, ftplib.error_reply):
+        except OSError:
+            logger.error(
+                f"Unable to upload {local_file} to {remote_dir}: {sys.exc_info()[1]}"
+            )
+            raise
+        except ftplib.error_reply:
+            logger.error(
+                f"Received unexpected response from server: {sys.exc_info()[1]}"
+            )
             raise
 
 
@@ -288,11 +318,10 @@ class _sftpClient(_BaseClient):
             port: port number for server
 
         """
-        if port not in [22, "22"]:
-            raise ValueError("Invalid port number for SFTP connection.")
-        self.connection: paramiko.SFTPClient = self._connect_to_server(
-            username=username, password=password, host=host, port=int(port)
-        )
+        if port in [22, "22"]:
+            self.connection: paramiko.SFTPClient = self._connect_to_server(
+                username=username, password=password, host=host, port=int(port)
+            )
 
     def __enter__(self, *args):
         """
@@ -324,6 +353,7 @@ class _sftpClient(_BaseClient):
             paramiko.AuthenticationException: if unable to authenticate with server
 
         """
+        logger.debug(f"Connecting to {host} via SFTP client")
         try:
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -334,8 +364,15 @@ class _sftpClient(_BaseClient):
                 password=password,
             )
             sftp_client = ssh.open_sftp()
+            logger.debug(f"Connected at {port} to {host}")
             return sftp_client
-        except (paramiko.SSHException, paramiko.AuthenticationException):
+        except paramiko.AuthenticationException:
+            logger.error(
+                f"Unable to authenticate with provided credentials: {sys.exc_info()[1]}"
+            )
+            raise
+        except paramiko.SSHException:
+            logger.error(f"Unable to connect to {host}: {sys.exc_info()[1]}")
             raise
 
     def get_remote_file_data(self, file: str, remote_dir: str) -> File:
@@ -356,10 +393,14 @@ class _sftpClient(_BaseClient):
         """
         remote_file = os.path.normpath(os.path.join(remote_dir, file))
         try:
+            logger.debug(f"Retrieving file data for {remote_file}")
             return File.from_stat_data(
                 data=self.connection.stat(remote_file), file_name=file
             )
         except OSError:
+            logger.error(
+                f"Unable to retrieve file data for {file}: {sys.exc_info()[1]}"
+            )
             raise
 
     def list_remote_file_data(self, remote_dir: str) -> List[File]:
@@ -377,8 +418,14 @@ class _sftpClient(_BaseClient):
         """
         try:
             file_metadata = self.connection.listdir_attr(remote_dir)
+            logger.debug(
+                f"Retrieved file data for {len(file_metadata)} files in {remote_dir}"
+            )
             return [File.from_stat_data(data=i) for i in file_metadata]
         except OSError:
+            logger.error(
+                f"Unable to retrieve file data for {remote_dir}: {sys.exc_info()[1]}"
+            )
             raise
 
     def download_file(self, file: str, remote_dir: str, local_dir: str) -> None:
@@ -402,8 +449,12 @@ class _sftpClient(_BaseClient):
         local_file = os.path.normpath(os.path.join(local_dir, file))
         remote_file = os.path.normpath(os.path.join(remote_dir, file))
         try:
+            logger.debug(f"Downloading {remote_file} to {local_file} via SFTP client")
             self.connection.get(remote_file, local_file)
         except OSError:
+            logger.error(
+                f"Unable to download {remote_file} to {local_file}: {sys.exc_info()[1]}"
+            )
             raise
 
     def upload_file(self, file: str, remote_dir: str, local_dir: str) -> File:
@@ -428,9 +479,13 @@ class _sftpClient(_BaseClient):
         """
         local_file = os.path.normpath(os.path.join(local_dir, file))
         try:
+            logger.debug(f"Uploading {local_file} to {remote_dir} via SFTP client")
             uploaded_file = self.connection.put(
                 local_file, f"{remote_dir}/{file}", confirm=True
             )
             return File.from_stat_data(uploaded_file, file_name=file)
         except OSError:
+            logger.error(
+                f"Unable to upload {local_file} to {remote_dir}: {sys.exc_info()[1]}"
+            )
             raise

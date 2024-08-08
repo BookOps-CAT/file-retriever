@@ -1,7 +1,9 @@
 import ftplib
 import paramiko
 import pytest
-from file_retriever.connect import Client, _ftpClient, _sftpClient, File
+from file_retriever.connect import Client
+from file_retriever._clients import _ftpClient, _sftpClient
+from file_retriever.file import File
 
 
 class TestMockClient:
