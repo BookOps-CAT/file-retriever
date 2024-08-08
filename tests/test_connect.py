@@ -67,6 +67,33 @@ class TestMockClient:
         "port",
         [21, 22],
     )
+    def test_Client_context_manager(self, mock_Client, stub_creds, port):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (port, "testdir", "test")
+        with Client(**stub_creds) as connect:
+            assert connect.session is not None
+
+    @pytest.mark.parametrize(
+        "port",
+        [21, 22],
+    )
+    def test_Client_check_connection(self, mock_Client, stub_creds, port):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (port, "testdir", "test")
+        connect = Client(**stub_creds)
+        live_connection = connect.check_connection()
+        assert live_connection is True
+
+    @pytest.mark.parametrize(
+        "port",
+        [21, 22],
+    )
     def test_Client_check_file_local(self, mock_Client_file_exists, stub_creds, port):
         (
             stub_creds["port"],

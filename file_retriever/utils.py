@@ -2,14 +2,6 @@ import os
 import yaml
 
 
-def vendor_config(config_path: str) -> None:
-    """Set environment variables from config file"""
-    with open(config_path, "r") as file:
-        config = yaml.safe_load(file)
-        for k, v in config.items():
-            os.environ[k] = v
-
-
 def logger_config() -> dict:
     """Create dict for logger configuration"""
     log_config_dict = {
@@ -36,3 +28,11 @@ def logger_config() -> dict:
         },
     }
     return log_config_dict
+
+
+def vendor_config(config_path: str) -> None:
+    """Set environment variables from config file"""
+    with open(config_path, "r") as file:
+        config = yaml.safe_load(file)
+        for k, v in config.items():
+            os.environ[k] = v

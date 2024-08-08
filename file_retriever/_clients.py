@@ -29,14 +29,6 @@ class _BaseClient(ABC):
         )
 
     @abstractmethod
-    def __enter__(self, *args):
-        return self
-
-    @abstractmethod
-    def __exit__(self, *args):
-        self.connection.close()
-
-    @abstractmethod
     def _connect_to_server(
         self,
         username: str,
@@ -47,15 +39,23 @@ class _BaseClient(ABC):
         pass
 
     @abstractmethod
-    def get_remote_file_data(self, file: str, remote_dir: str) -> File:
-        pass
-
-    @abstractmethod
-    def list_remote_file_data(self, remote_dir: str) -> List[File]:
+    def close(self, *args) -> None:
         pass
 
     @abstractmethod
     def download_file(self, file: str, remote_dir: str, local_dir: str) -> None:
+        pass
+
+    @abstractmethod
+    def get_remote_file_data(self, file: str, remote_dir: str) -> File:
+        pass
+
+    @abstractmethod
+    def is_active(self) -> bool:
+        pass
+
+    @abstractmethod
+    def list_remote_file_data(self, remote_dir: str) -> List[File]:
         pass
 
     @abstractmethod
@@ -90,22 +90,6 @@ class _ftpClient(_BaseClient):
                 username=username, password=password, host=host, port=int(port)
             )
 
-    def __enter__(self, *args):
-        """
-        Allows for use of context manager with `_ftpClient` class.
-
-        Opens context manager.
-        """
-        return self
-
-    def __exit__(self, *args):
-        """
-        Allows for use of context manager with `_ftpClient` class.
-
-        Closes context manager.
-        """
-        self.connection.close()
-
     def _connect_to_server(
         self, username: str, password: str, host: str, port: int
     ) -> ftplib.FTP:
@@ -137,6 +121,45 @@ class _ftpClient(_BaseClient):
             raise
         except ftplib.error_temp:
             logger.error(f"Unable to connect to {host}: {sys.exc_info()[1]}")
+            raise
+
+    def close(self):
+        """Closes connection to server."""
+        self.connection.close()
+
+    def download_file(self, file: str, remote_dir: str, local_dir: str) -> None:
+        """
+        Downloads file from `remote_dir` on server to `local_dir`.
+
+        Args:
+            file:
+                name of file to upload
+            remote_dir:
+                remote directory to download file from
+            local_dir:
+                local directory to download file to
+
+        Returns:
+            None
+
+        Raises:
+            OSError: if unable to download file from server or if file is not found
+        """
+        local_file = os.path.normpath(os.path.join(local_dir, file))
+        remote_file = os.path.normpath(os.path.join(remote_dir, file))
+        try:
+            logger.debug(f"Downloading {remote_file} to {local_file} via FTP client")
+            with open(local_file, "wb") as f:
+                self.connection.retrbinary(f"RETR {remote_file}", f.write)
+        except OSError:
+            logger.error(
+                f"Unable to download {remote_file} to {local_file}: {sys.exc_info()[1]}"
+            )
+            raise
+        except ftplib.error_reply:
+            logger.error(
+                f"Received unexpected response from server: {sys.exc_info()[1]}"
+            )
             raise
 
     def get_remote_file_data(self, file: str, remote_dir: Optional[str] = None) -> File:
@@ -192,6 +215,19 @@ class _ftpClient(_BaseClient):
             )
             raise
 
+    def is_active(self) -> bool:
+        """
+        Checks if connection to server is active.
+
+        Returns:
+            bool: True if connection is active, False otherwise
+        """
+        status = self.connection.voidcmd("NOOP")
+        if status.startswith("2"):
+            return True
+        else:
+            return False
+
     def list_remote_file_data(self, remote_dir: str) -> List[File]:
         """
         Retrieves metadata for each file in `remote_dir` on server.
@@ -220,41 +256,6 @@ class _ftpClient(_BaseClient):
             raise
         logger.debug(f"Retrieved file data for {len(files)} files in {remote_dir}")
         return files
-
-    def download_file(self, file: str, remote_dir: str, local_dir: str) -> None:
-        """
-        Downloads file from `remote_dir` on server to `local_dir`.
-
-        Args:
-            file:
-                name of file to upload
-            remote_dir:
-                remote directory to download file from
-            local_dir:
-                local directory to download file to
-
-        Returns:
-            None
-
-        Raises:
-            OSError: if unable to download file from server or if file is not found
-        """
-        local_file = os.path.normpath(os.path.join(local_dir, file))
-        remote_file = os.path.normpath(os.path.join(remote_dir, file))
-        try:
-            logger.debug(f"Downloading {remote_file} to {local_file} via FTP client")
-            with open(local_file, "wb") as f:
-                self.connection.retrbinary(f"RETR {remote_file}", f.write)
-        except OSError:
-            logger.error(
-                f"Unable to download {remote_file} to {local_file}: {sys.exc_info()[1]}"
-            )
-            raise
-        except ftplib.error_reply:
-            logger.error(
-                f"Received unexpected response from server: {sys.exc_info()[1]}"
-            )
-            raise
 
     def upload_file(self, file: str, remote_dir: str, local_dir: str) -> File:
         """
@@ -323,22 +324,6 @@ class _sftpClient(_BaseClient):
                 username=username, password=password, host=host, port=int(port)
             )
 
-    def __enter__(self, *args):
-        """
-        Allows for use of context manager with `_sftpClient` class.
-
-        Opens context manager.
-        """
-        return self
-
-    def __exit__(self, *args):
-        """
-        Allows for use of context manager with `_sftpClient` class.
-
-        Closes context manager.
-        """
-        self.connection.close()
-
     def _connect_to_server(
         self, username: str, password: str, host: str, port: int
     ) -> paramiko.SFTPClient:
@@ -375,6 +360,39 @@ class _sftpClient(_BaseClient):
             logger.error(f"Unable to connect to {host}: {sys.exc_info()[1]}")
             raise
 
+    def close(self):
+        """Closes connection to server."""
+        self.connection.close()
+
+    def download_file(self, file: str, remote_dir: str, local_dir: str) -> None:
+        """
+        Downloads file from `remote_dir` on server to `local_dir`.
+
+        Args:
+            file:
+                name of file to upload
+            remote_dir:
+                remote directory to download file from
+            local_dir:
+                local directory to download file to
+
+        Returns:
+            None
+
+        Raises:
+            OSError: if unable to download file from server or if file is not found
+        """
+        local_file = os.path.normpath(os.path.join(local_dir, file))
+        remote_file = os.path.normpath(os.path.join(remote_dir, file))
+        try:
+            logger.debug(f"Downloading {remote_file} to {local_file} via SFTP client")
+            self.connection.get(remote_file, local_file)
+        except OSError:
+            logger.error(
+                f"Unable to download {remote_file} to {local_file}: {sys.exc_info()[1]}"
+            )
+            raise
+
     def get_remote_file_data(self, file: str, remote_dir: str) -> File:
         """
         Retrieves metadata for single file on server.
@@ -403,6 +421,19 @@ class _sftpClient(_BaseClient):
             )
             raise
 
+    def is_active(self) -> bool:
+        """
+        Checks if connection to server is active.
+
+        Returns:
+            bool: True if connection is active, False otherwise
+        """
+        channel = self.connection.get_channel()
+        if channel is None or channel is not None and channel.closed:
+            return False
+        else:
+            return True
+
     def list_remote_file_data(self, remote_dir: str) -> List[File]:
         """
         Lists metadata for each file in `remote_dir` on server.
@@ -425,35 +456,6 @@ class _sftpClient(_BaseClient):
         except OSError:
             logger.error(
                 f"Unable to retrieve file data for {remote_dir}: {sys.exc_info()[1]}"
-            )
-            raise
-
-    def download_file(self, file: str, remote_dir: str, local_dir: str) -> None:
-        """
-        Downloads file from `remote_dir` on server to `local_dir`.
-
-        Args:
-            file:
-                name of file to upload
-            remote_dir:
-                remote directory to download file from
-            local_dir:
-                local directory to download file to
-
-        Returns:
-            None
-
-        Raises:
-            OSError: if unable to download file from server or if file is not found
-        """
-        local_file = os.path.normpath(os.path.join(local_dir, file))
-        remote_file = os.path.normpath(os.path.join(remote_dir, file))
-        try:
-            logger.debug(f"Downloading {remote_file} to {local_file} via SFTP client")
-            self.connection.get(remote_file, local_file)
-        except OSError:
-            logger.error(
-                f"Unable to download {remote_file} to {local_file}: {sys.exc_info()[1]}"
             )
             raise
 
