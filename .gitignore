@@ -123,3 +123,4 @@ config.yaml
 creds.yaml
 temp/*
 *.mrc
+run.py
