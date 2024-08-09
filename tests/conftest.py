@@ -8,6 +8,7 @@ import yaml
 import pytest
 from file_retriever._clients import _ftpClient, _sftpClient, _BaseClient
 from file_retriever.connect import Client
+from file_retriever.file import File
 
 logger = logging.getLogger("file_retriever")
 
@@ -50,11 +51,18 @@ class MockFileData:
 
 
 @pytest.fixture
-def mock_file_data(monkeypatch):
-    def mock_stat(*args, **kwargs):
-        return MockFileData()
-
-    monkeypatch.setattr(os, "stat", mock_stat)
+def mock_file_data():
+    file = MockFileData()
+    return File(
+        file.file_name,
+        file.st_mtime,
+        file.st_size,
+        file.st_uid,
+        file.st_gid,
+        file.st_atime,
+        file.st_mode,
+        None,
+    )
 
 
 @pytest.fixture
@@ -156,13 +164,17 @@ def stub_client(monkeypatch):
 
 
 @pytest.fixture
-def mock_ftpClient_sftpClient(monkeypatch, mock_open_file, stub_client, mock_file_data):
+def mock_ftpClient_sftpClient(monkeypatch, mock_open_file, stub_client):
     def mock_ftp_client(*args, **kwargs):
         return MockFTP()
 
     def mock_sftp_client(*args, **kwargs):
         return MockSFTPClient()
 
+    def mock_stat(*args, **kwargs):
+        return MockFileData()
+
+    monkeypatch.setattr(os, "stat", mock_stat)
     monkeypatch.setattr(_ftpClient, "_connect_to_server", mock_ftp_client)
     monkeypatch.setattr(_sftpClient, "_connect_to_server", mock_sftp_client)
 

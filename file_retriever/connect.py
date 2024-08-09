@@ -113,7 +113,10 @@ class Client:
         else:
             return os.path.exists(os.path.join(dir, file))
 
-    def get_file(self, file: str, remote_dir: Optional[str] = None) -> io.BytesIO:
+    # def get_file(self, file: str, remote_dir: Optional[str] = None) -> io.BytesIO:
+    def get_file(
+        self, file: Union[File, List[File]], remote_dir: Optional[str] = None
+    ) -> Union[File, List[File]]:
         """
         Fetches `file` from `remote_dir` on server as bytes. If `remote_dir` is not
         provided then file will be fetched from `self.remote_dir`.
@@ -183,8 +186,8 @@ class Client:
             return files
 
     def put_file(
-        self, fh: io.BytesIO, file: str, dir: str, remote: bool, check: bool
-    ) -> File:
+        self, file: Union[File, List[File]], dir: str, remote: bool, check: bool
+    ) -> Union[File, List[File]]:
         """
         Writes fetched file to directory. If `remote` is True, then file is written
         to directory `dir` the Client server. If `remote` is False, then file is written
@@ -210,8 +213,11 @@ class Client:
             ftplib.error_perm: if unable to write file to directory
             OSError: if unable to write file to directory
         """
-        if check and self.file_exists(file, dir=dir, remote=True):
-            logger.error(f"{file} not written to {dir} because it already exists")
-            raise FileExistsError
+        # if check and self.file_exists(file.file_name, dir=dir, remote=True):
+        #     if isinstance(file, list):
+        #         logger.error(f"{file} not written to {dir} because it already exists")
+        #         raise FileExistsError
+        #     logger.error(f"{file} not written to {dir} because it already exists")
+        #     raise FileExistsError
         logger.debug(f"Writing {file} to {dir} directory")
-        return self.session.write_file(fh, file, dir, remote)
+        return self.session.write_file(file, dir, remote)

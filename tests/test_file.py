@@ -13,7 +13,7 @@ def test_File():
     assert isinstance(file, File)
 
 
-def test_File_from_stat_data(mock_file_data):
+def test_File_from_stat_data(mock_ftpClient_sftpClient):
     foo_attr = paramiko.SFTPAttributes.from_stat(
         obj=os.stat("foo.mrc"), filename="foo.mrc"
     )
@@ -36,14 +36,14 @@ def test_File_from_stat_data(mock_file_data):
     assert baz.file_name == "baz.mrc"
 
 
-def test_File_from_stat_data_no_filename(mock_file_data):
+def test_File_from_stat_data_no_filename(mock_ftpClient_sftpClient):
     sftp_attr = paramiko.SFTPAttributes.from_stat(obj=os.stat("foo.mrc"))
     with pytest.raises(AttributeError) as exc:
         File.from_stat_data(data=sftp_attr)
     assert "No filename provided" in str(exc)
 
 
-def test_File_from_stat_data_no_st_mtime(mock_file_data):
+def test_File_from_stat_data_no_st_mtime(mock_ftpClient_sftpClient):
     sftp_attr = paramiko.SFTPAttributes.from_stat(
         obj=os.stat("foo.mrc"), filename="foo.mrc"
     )
@@ -53,7 +53,7 @@ def test_File_from_stat_data_no_st_mtime(mock_file_data):
     assert "No file modification time provided" in str(exc)
 
 
-def test_File_from_stat_data_None_st_mtime(mock_file_data):
+def test_File_from_stat_data_None_st_mtime(mock_ftpClient_sftpClient):
     sftp_attr = paramiko.SFTPAttributes.from_stat(
         obj=os.stat("foo.mrc"), filename="foo.mrc"
     )

@@ -231,15 +231,15 @@ class TestMockClient:
         "port, dir",
         [(21, "testdir"), (21, None), (22, "testdir"), (22, None)],
     )
-    def test_Client_get_file(self, mock_Client, stub_creds, port, dir):
+    def test_Client_get_file(self, mock_Client, mock_file_data, stub_creds, port, dir):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
             stub_creds["name"],
         ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
-        downloaded_file = connect.get_file("foo.mrc", remote_dir=dir)
-        assert isinstance(downloaded_file, io.BytesIO)
+        downloaded_file = connect.get_file(mock_file_data, remote_dir=dir)
+        assert isinstance(downloaded_file, File)
 
     def test_Client_ftp_get_file_permissions_error(self, mock_file_error, stub_creds):
         (
@@ -251,7 +251,9 @@ class TestMockClient:
         with pytest.raises(ftplib.error_perm):
             connect.get_file("foo.mrc", remote_dir="bar_dir")
 
-    def test_Client_sftp_get_file_not_found(self, mock_file_error, stub_creds):
+    def test_Client_sftp_get_file_not_found(
+        self, mock_file_error, mock_file_data, stub_creds
+    ):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
@@ -259,7 +261,7 @@ class TestMockClient:
         ) = (22, "testdir", "test")
         connect = Client(**stub_creds)
         with pytest.raises(OSError):
-            connect.get_file("foo.mrc", remote_dir="bar_dir")
+            connect.get_file(mock_file_data, remote_dir="bar_dir")
 
     @pytest.mark.parametrize(
         "port, check",

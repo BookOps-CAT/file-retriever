@@ -44,7 +44,9 @@ class _BaseClient(ABC):
         pass
 
     @abstractmethod
-    def fetch_file(self, file: str, remote_dir: str) -> io.BytesIO:
+    def fetch_file(
+        self, file: Union[File, List[File]], remote_dir: str
+    ) -> Union[File, List[File]]:
         pass
 
     @abstractmethod
@@ -60,7 +62,9 @@ class _BaseClient(ABC):
         pass
 
     @abstractmethod
-    def write_file(self, fh: io.BytesIO, file: str, dir: str, remote: bool) -> File:
+    def write_file(
+        self, file: Union[File, List[File]], dir: str, remote: bool
+    ) -> Union[File, List[File]]:
         pass
 
 
@@ -128,7 +132,9 @@ class _ftpClient(_BaseClient):
         """Closes connection to server."""
         self.connection.close()
 
-    def fetch_file(self, file: str, remote_dir: str) -> io.BytesIO:
+    def fetch_file(
+        self, file: Union[File, List[File]], remote_dir: str
+    ) -> Union[File, List[File]]:
         """
         Fetches `file` from `remote_dir` on server and creates. File
         is loaded as `io.BytesIO` object to be written with `write_local_file`
@@ -147,11 +153,25 @@ class _ftpClient(_BaseClient):
             if unable to download file from server due to permissions error
         """
         try:
+            logger.debug(f"Changing cwd to {remote_dir}")
             self.connection.cwd(remote_dir)
-            fh = io.BytesIO()
-            logger.debug(f"Fetching {file} from {remote_dir}")
-            self.connection.retrbinary(f"RETR {file}", fh.write)
-            return fh
+            if isinstance(file, File):
+                fh = io.BytesIO()
+                logger.debug(f"Fetching {file} from {remote_dir}")
+                self.connection.retrbinary(f"RETR {file.file_name}", fh.write)
+                logger.debug(f"File fetched from {remote_dir}")
+                file.file_stream = fh
+                return file
+            elif isinstance(file, list):
+                file_list = []
+                for f in file:
+                    fh = io.BytesIO()
+                    logger.debug(f"Fetching {f} from {remote_dir}")
+                    self.connection.retrbinary(f"RETR {f.file_name}", fh.write)
+                    logger.debug(f"File fetched from {remote_dir}")
+                    f.file_stream = fh
+                    file_list.append(f)
+                return file_list
         except ftplib.error_perm:
             logger.error(
                 f"Unable to retrieve {file} from {remote_dir}: {sys.exc_info()[1]}"
@@ -244,7 +264,10 @@ class _ftpClient(_BaseClient):
         else:
             return False
 
-    def write_file(self, fh: io.BytesIO, file: str, dir: str, remote: bool) -> File:
+    # def write_file(self, fh: io.BytesIO, file: str, dir: str, remote: bool) -> File:
+    def write_file(
+        self, file: Union[File, List[File]], dir: str, remote: bool
+    ) -> Union[File, List[File]]:
         """
         Writes fetched file to directory. If `remote` is True, then file is written
         to server. If `remote` is False, then file is written to local directory.
@@ -267,16 +290,44 @@ class _ftpClient(_BaseClient):
             OSError: if unable to write file to directory
         """
         try:
-            if remote:
+            if isinstance(file, File) and remote:
                 self.connection.cwd(dir)
-                with open(file, "wb") as rf:
-                    self.connection.storbinary(f"STOR {file}", rf)
-                return self.get_remote_file_data(file, dir)
-            else:
-                local_file = f"{dir}/{file}"
+                with file.file_stream as rf:
+                    self.connection.storbinary(f"STOR {file.file_name}", rf)
+                return self.get_remote_file_data(file.file_name, dir)
+            elif isinstance(file, list) and remote:
+                self.connection.cwd(dir)
+                for f in file:
+                    with f.file_stream as rf:
+                        self.connection.storbinary(f"STOR {f.file_name}", rf)
+                return self.get_remote_file_list(dir)
+            elif isinstance(file, File) and not remote:
+                local_file = f"{dir}/{file.file_name}"
                 with open(local_file, "wb") as lf:
-                    lf.write(fh.getbuffer())
-                return File.from_stat_data(os.stat(local_file), file)
+                    lf.write(file.file_stream.getbuffer())
+                return File.from_stat_data(os.stat(local_file), file.file_name)
+            elif isinstance(file, list) and not remote:
+                file_list = []
+                for f in file:
+                    local_file = f"{dir}/{f.file_name}"
+                    with open(local_file, "wb") as lf:
+                        lf.write(f.file_stream.getbuffer())
+                    file_list.append(
+                        File.from_stat_data(os.stat(local_file), f.file_name)
+                    )
+                return file_list
+            else:
+                raise ValueError("Invalid file type provided.")
+            # if remote:
+            #     self.connection.cwd(dir)
+            #     with open(file, "wb") as rf:
+            #         self.connection.storbinary(f"STOR {file}", rf)
+            #     return self.get_remote_file_data(file, dir)
+            # else:
+            #     local_file = f"{dir}/{file}"
+            #     with open(local_file, "wb") as lf:
+            #         lf.write(fh.getbuffer())
+            #     return File.from_stat_data(os.stat(local_file), file)
         except ftplib.error_perm:
             logger.error(
                 f"Unable to write {file} to local directory: {sys.exc_info()[1]}"
@@ -356,7 +407,10 @@ class _sftpClient(_BaseClient):
         """Closes connection to server."""
         self.connection.close()
 
-    def fetch_file(self, file: str, remote_dir: str) -> io.BytesIO:
+    # def fetch_file(self, file: str, remote_dir: str) -> io.BytesIO:
+    def fetch_file(
+        self, file: Union[File, List[File]], remote_dir: str
+    ) -> Union[File, List[File]]:
         """
         Fetches `file` from `remote_dir` on server. File is loaded as `io.BytesIO`
         object to be written with `write_local_file` or `write_remote_file` method.
@@ -373,12 +427,24 @@ class _sftpClient(_BaseClient):
         Raises:
             OSError: if unable to download file from server or if file is not found
         """
-        remote_file = f"{remote_dir}/{file}"
         try:
-            fh = io.BytesIO()
-            logger.debug(f"Fetching {file} from {remote_dir}")
-            self.connection.getfo(remotepath=remote_file, fl=fh)
-            return fh
+            if isinstance(file, File):
+                remote_file = f"{remote_dir}/{file.file_name}"
+                fh = io.BytesIO()
+                logger.debug(f"Fetching {file} from {remote_dir}")
+                self.connection.getfo(remotepath=remote_file, fl=fh)
+                file.file_stream = fh
+                return file
+            elif isinstance(file, list):
+                file_list = []
+                for f in file:
+                    remote_file = f"{remote_dir}/{f.file_name}"
+                    fh = io.BytesIO()
+                    logger.debug(f"Fetching {f} from {remote_dir}")
+                    self.connection.getfo(remotepath=remote_file, fl=fh)
+                    f.file_stream = fh
+                    file_list.append(f)
+                return file_list
         except OSError:
             logger.error(
                 f"Unable to retrieve {file} from {remote_dir}: {sys.exc_info()[1]}"
@@ -451,7 +517,9 @@ class _sftpClient(_BaseClient):
         else:
             return True
 
-    def write_file(self, fh: io.BytesIO, file: str, dir: str, remote: bool) -> File:
+    def write_file(
+        self, file: Union[File, List[File]], dir: str, remote: bool
+    ) -> Union[File, List[File]]:
         """
         Writes fetched file to directory. If `remote` is True, then file is written
         to server. If `remote` is False, then file is written to local directory.
@@ -473,16 +541,79 @@ class _sftpClient(_BaseClient):
             OSError: if unable to write file to directory
         """
         try:
-            if remote:
+            if isinstance(file, File) and remote:
                 self.connection.chdir(dir)
-                written_file = self.connection.putfo(fh, remotepath=file)
+                written_file = self.connection.putfo(
+                    file.file_stream.getbuffer(), remotepath=f"{dir}/{file.file_name}"
+                )
                 self.connection.chdir(path=None)
-                return File.from_stat_data(written_file, file_name=file)
-            else:
+                return File.from_stat_data(
+                    written_file, file_name=f"{dir}/{file.file_name}"
+                )
+            elif isinstance(file, File) and not remote:
                 local_file = f"{dir}/{file}"
                 with open(local_file, "wb") as lf:
-                    lf.write(fh.getbuffer())
-                return File.from_stat_data(os.stat(local_file), file)
+                    lf.write(file.file_stream.getbuffer())
+                return File.from_stat_data(os.stat(local_file), file.file_name)
+
+            elif isinstance(file, list) and remote:
+                file_list = []
+                self.connection.chdir(dir)
+                for f in file:
+                    written_file = self.connection.putfo(
+                        f.file_stream.getbuffer(), remotepath=f"{dir}/{f.file_name}"
+                    )
+                    file_list.append(
+                        File.from_stat_data(written_file, file_name=f.file_name)
+                    )
+                self.connection.chdir(path=None)
+                return file_list
+            elif isinstance(file, list) and not remote:
+                file_list = []
+                for f in file:
+                    local_file = f"{dir}/{f.file_name}"
+                    with open(local_file, "wb") as lf:
+                        lf.write(f.file_stream.getbuffer())
+                    file_list.append(
+                        File.from_stat_data(os.stat(local_file), f.file_name)
+                    )
+                return file_list
+            else:
+                raise ValueError("Invalid file type provided.")
         except OSError:
             logger.error(f"Unable to write {file} to {dir}: {sys.exc_info()[1]}")
             raise
+
+
+#  def write_file(self, fh: io.BytesIO, file: str, dir: str, remote: bool) -> File:
+#         """
+#         Writes fetched file to directory. If `remote` is True, then file is written
+#         to server. If `remote` is False, then file is written to local directory.
+
+#         Args:
+#             fh:
+#                 `io.BytesIO` object representing file to write
+#             file:
+#                 name of file to write
+#             dir:
+#                 directory to write file to
+#             remote:
+#                 bool indicating if file should be written to remote or local directory
+
+#         Returns:
+#             `File` object representing written file
+
+#         Raises:
+#             OSError: if unable to write file to directory
+#         """
+#         try:
+#             if remote:
+#                 self.connection.chdir(dir)
+#                 written_file = self.connection.putfo(fh, remotepath=file)
+#                 self.connection.chdir(path=None)
+#                 return File.from_stat_data(written_file, file_name=file)
+#             else:
+#                 local_file = f"{dir}/{file}"
+#                 with open(local_file, "wb") as lf:
+#                     lf.write(fh.getbuffer())
+#                 return File.from_stat_data(os.stat(local_file), file)

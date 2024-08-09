@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import datetime
+import io
 import os
 import paramiko
 from typing import Optional, Union
@@ -16,6 +17,7 @@ class File:
     file_gid: Optional[int] = None
     file_atime: Optional[float] = None
     file_mode: Optional[int] = None
+    file_stream: Optional[io.BytesIO] = None
 
     @classmethod
     def from_stat_data(
@@ -54,13 +56,14 @@ class File:
             raise AttributeError("No file modification time provided")
 
         return cls(
-            filename,
-            data.st_mtime,
-            data.st_size,
-            data.st_uid,
-            data.st_gid,
-            data.st_atime,
-            data.st_mode,
+            file_name=filename,
+            file_mtime=data.st_mtime,
+            file_size=data.st_size,
+            file_uid=data.st_uid,
+            file_gid=data.st_gid,
+            file_atime=data.st_atime,
+            file_mode=data.st_mode,
+            file_stream=None,
         )
 
     @staticmethod
