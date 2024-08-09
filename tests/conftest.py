@@ -15,6 +15,18 @@ class FakeUtcNow(datetime.datetime):
         return cls(2024, 6, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
 
 
+class MockChannel:
+    """Properties for a mock paramiko.Channel object."""
+
+    @property
+    def closed(self):
+        return False
+
+    @property
+    def active(self):
+        return 1
+
+
 class MockFileData:
     """File properties for a mock file object."""
 
@@ -72,7 +84,10 @@ class MockFTP:
         pass
 
     def voidcmd(self, *args, **kwargs) -> str:
-        return "213 20240101010000"
+        if "MDTM" in args[0]:
+            return "213 20240101010000"
+        else:
+            return "200"
 
 
 class MockSFTPClient:
@@ -83,6 +98,9 @@ class MockSFTPClient:
 
     def get(self, *args, **kwargs) -> None:
         open(args[1], "x+")
+
+    def get_channel(self, *args, **kwargs) -> MockChannel:
+        return MockChannel()
 
     def listdir_attr(self, *args, **kwargs) -> List[paramiko.SFTPAttributes]:
         return [MockFileData().create_SFTPAttributes()]
@@ -213,6 +231,18 @@ def mock_connection_error_reply(monkeypatch, mock_open_file, stub_client):
     monkeypatch.setattr(ftplib.FTP, "retrbinary", mock_ftp_error_reply)
     monkeypatch.setattr(ftplib.FTP, "retrlines", mock_ftp_error_reply)
     monkeypatch.setattr(ftplib.FTP, "nlst", mock_ftp_error_reply)
+
+
+@pytest.fixture
+def mock_connection_dropped(monkeypatch, mock_open_file, stub_client):
+    def mock_ftp_connection_closed(*args, **kwargs):
+        return "426"
+
+    def mock_sftp_connection_closed(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(ftplib.FTP, "voidcmd", mock_ftp_connection_closed)
+    monkeypatch.setattr(MockSFTPClient, "get_channel", mock_sftp_connection_closed)
 
 
 @pytest.fixture

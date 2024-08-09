@@ -1,7 +1,9 @@
 import ftplib
 import paramiko
 import pytest
-from file_retriever.connect import Client, _ftpClient, _sftpClient, File
+from file_retriever.connect import Client
+from file_retriever._clients import _ftpClient, _sftpClient
+from file_retriever.file import File
 
 
 class TestMockClient:
@@ -60,6 +62,33 @@ class TestMockClient:
         ) = (22, "testdir", "test")
         with pytest.raises(paramiko.AuthenticationException):
             Client(**stub_creds)
+
+    @pytest.mark.parametrize(
+        "port",
+        [21, 22],
+    )
+    def test_Client_context_manager(self, mock_Client, stub_creds, port):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (port, "testdir", "test")
+        with Client(**stub_creds) as connect:
+            assert connect.session is not None
+
+    @pytest.mark.parametrize(
+        "port",
+        [21, 22],
+    )
+    def test_Client_check_connection(self, mock_Client, stub_creds, port):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (port, "testdir", "test")
+        connect = Client(**stub_creds)
+        live_connection = connect.check_connection()
+        assert live_connection is True
 
     @pytest.mark.parametrize(
         "port",
