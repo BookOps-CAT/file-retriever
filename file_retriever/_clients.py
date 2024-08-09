@@ -44,10 +44,6 @@ class _BaseClient(ABC):
         pass
 
     @abstractmethod
-    def download_file(self, file: str, remote_dir: str, local_dir: str) -> None:
-        pass
-
-    @abstractmethod
     def fetch_file(self, file: str, remote_dir: str) -> io.BytesIO:
         pass
 
@@ -56,15 +52,15 @@ class _BaseClient(ABC):
         pass
 
     @abstractmethod
+    def get_remote_file_list(self, remote_dir: str) -> List[File]:
+        pass
+
+    @abstractmethod
     def is_active(self) -> bool:
         pass
 
     @abstractmethod
-    def list_remote_file_data(self, remote_dir: str) -> List[File]:
-        pass
-
-    @abstractmethod
-    def upload_file(self, file: str, remote_dir: str, local_dir: str) -> File:
+    def write_file(self, fh: io.BytesIO, file: str, dir: str, remote: bool) -> File:
         pass
 
 
@@ -132,40 +128,6 @@ class _ftpClient(_BaseClient):
         """Closes connection to server."""
         self.connection.close()
 
-    def download_file(self, file: str, remote_dir: str, local_dir: str) -> None:
-        """
-        Downloads file from `remote_dir` on server to `local_dir`.
-
-        Args:
-            file:
-                name of file to upload
-            remote_dir:
-                remote directory to download file from
-            local_dir:
-                local directory to download file to
-
-        Returns:
-            None
-
-        Raises:
-            ftplib.error_perm:
-                if unable to download file from server due to permissions error
-        """
-        local_file = os.path.normpath(os.path.join(local_dir, file))
-        try:
-            logger.debug(
-                f"Downloading {file} from {remote_dir} to {local_file} via FTP client"
-            )
-            self.connection.cwd(remote_dir)
-            with open(local_file, "wb") as f:
-                self.connection.retrbinary(f"RETR {file}", f.write)
-        except ftplib.error_perm:
-            logger.error(
-                f"Unable to download {file} from {remote_dir} to {local_file}: "
-                f"{sys.exc_info()[1]}"
-            )
-            raise
-
     def fetch_file(self, file: str, remote_dir: str) -> io.BytesIO:
         """
         Fetches `file` from `remote_dir` on server and creates. File
@@ -211,12 +173,9 @@ class _ftpClient(_BaseClient):
             ftplib.error_perm:
                 if unable to retrieve file data due to permissions error
         """
-        if remote_dir is not None:
-            remote_file = f"{remote_dir}/{file}"
-        else:
-            remote_file = file
-        file_name = os.path.basename(remote_file)
         try:
+            if remote_dir is not None:
+                self.connection.cwd(remote_dir)
 
             permissions = None
 
@@ -224,16 +183,15 @@ class _ftpClient(_BaseClient):
                 nonlocal permissions
                 permissions = File.parse_permissions(permissions_str=data)
 
-            self.connection.retrlines(f"LIST {remote_file}", get_file_permissions),
+            self.connection.retrlines(f"LIST {file}", get_file_permissions),
             if permissions is None:
                 logger.error(f"{file} not found on server.")
                 raise ftplib.error_perm("File not found on server.")
-            # logger.debug(f"Retrieving file data for {remote_file}")
             return File(
-                file_name=file_name,
-                file_size=self.connection.size(remote_file),
+                file_name=os.path.basename(file),
+                file_size=self.connection.size(file),
                 file_mtime=File.parse_mdtm_time(
-                    self.connection.voidcmd(f"MDTM {remote_file}")
+                    self.connection.voidcmd(f"MDTM {file}")
                 ),
                 file_mode=permissions,
             )
@@ -243,20 +201,7 @@ class _ftpClient(_BaseClient):
             )
             raise
 
-    def is_active(self) -> bool:
-        """
-        Checks if connection to server is active.
-
-        Returns:
-            bool: True if connection is active, False otherwise
-        """
-        status = self.connection.voidcmd("NOOP")
-        if status.startswith("2"):
-            return True
-        else:
-            return False
-
-    def list_remote_file_data(self, remote_dir: str) -> List[File]:
+    def get_remote_file_list(self, remote_dir: str) -> List[File]:
         """
         Retrieves metadata for each file in `remote_dir` on server.
 
@@ -286,35 +231,60 @@ class _ftpClient(_BaseClient):
         logger.debug(f"Retrieved file data for {len(files)} files in {remote_dir}")
         return files
 
-    def upload_file(self, file: str, remote_dir: str, local_dir: str) -> File:
+    def is_active(self) -> bool:
         """
-        Upload file from `local_dir` to `remote_dir` on server.
-
-        Args:
-            file:
-                name of file to upload
-            remote_dir:
-                remote directory to upload file to
-            local_dir:
-                local directory to upload file from
+        Checks if connection to server is active.
 
         Returns:
-            uploaded file as `File` object
+            bool: True if connection is active, False otherwise
+        """
+        status = self.connection.voidcmd("NOOP")
+        if status.startswith("2"):
+            return True
+        else:
+            return False
+
+    def write_file(self, fh: io.BytesIO, file: str, dir: str, remote: bool) -> File:
+        """
+        Writes fetched file to directory. If `remote` is True, then file is written
+        to server. If `remote` is False, then file is written to local directory.
+
+        Args:
+            fh:
+                `io.BytesIO` object representing file to write
+            file:
+                name of file to write
+            dir:
+                directory to write file to
+            remote:
+                bool indicating if file should be written to remote or local directory
+
+        Returns:
+            `File` object representing written file
 
         Raises:
-            ftplib.error_perm:
-                if unable to upload file due to permissions error.
+            ftplib.error_perm: if unable to write file to directory
+            OSError: if unable to write file to directory
         """
-        local_file = os.path.normpath(os.path.join(local_dir, file))
-        remote_file = os.path.normpath(os.path.join(remote_dir, file))
         try:
-            logger.debug(f"Uploading {local_file} to {remote_dir} via FTP client")
-            with open(remote_file, "rb") as rf:
-                self.connection.storbinary(f"STOR {local_file}", rf)
-            return self.get_remote_file_data(file, remote_dir)
+            if remote:
+                self.connection.cwd(dir)
+                with open(file, "wb") as rf:
+                    self.connection.storbinary(f"STOR {file}", rf)
+                return self.get_remote_file_data(file, dir)
+            else:
+                local_file = f"{dir}/{file}"
+                with open(local_file, "wb") as lf:
+                    lf.write(fh.getbuffer())
+                return File.from_stat_data(os.stat(local_file), file)
         except ftplib.error_perm:
             logger.error(
-                f"Unable to upload {local_file} to {remote_dir}: {sys.exc_info()[1]}"
+                f"Unable to write {file} to local directory: {sys.exc_info()[1]}"
+            )
+            raise
+        except OSError:
+            logger.error(
+                f"Unable to write {file} to remote directory: {sys.exc_info()[1]}"
             )
             raise
 
@@ -386,35 +356,6 @@ class _sftpClient(_BaseClient):
         """Closes connection to server."""
         self.connection.close()
 
-    def download_file(self, file: str, remote_dir: str, local_dir: str) -> None:
-        """
-        Downloads file from `remote_dir` on server to `local_dir`.
-
-        Args:
-            file:
-                name of file to upload
-            remote_dir:
-                remote directory to download file from
-            local_dir:
-                local directory to download file to
-
-        Returns:
-            None
-
-        Raises:
-            OSError: if unable to download file from server or if file is not found
-        """
-        local_file = os.path.normpath(os.path.join(local_dir, file))
-        remote_file = os.path.normpath(os.path.join(remote_dir, file))
-        try:
-            logger.debug(f"Downloading {remote_file} to {local_file} via SFTP client")
-            self.connection.get(remotepath=remote_file, localpath=local_file)
-        except OSError:
-            logger.error(
-                f"Unable to download {remote_file} to {local_file}: {sys.exc_info()[1]}"
-            )
-            raise
-
     def fetch_file(self, file: str, remote_dir: str) -> io.BytesIO:
         """
         Fetches `file` from `remote_dir` on server. File is loaded as `io.BytesIO`
@@ -432,7 +373,7 @@ class _sftpClient(_BaseClient):
         Raises:
             OSError: if unable to download file from server or if file is not found
         """
-        remote_file = os.path.normpath(os.path.join(remote_dir, file))
+        remote_file = f"{remote_dir}/{file}"
         try:
             fh = io.BytesIO()
             logger.debug(f"Fetching {file} from {remote_dir}")
@@ -460,7 +401,7 @@ class _sftpClient(_BaseClient):
                 if `file` or `remote_dir` does not exist or if server response
                 code is not in range 200-299
         """
-        remote_file = os.path.normpath(os.path.join(remote_dir, file))
+        remote_file = f"{remote_dir}/{file}"
         try:
             logger.debug(f"Retrieving file data for {remote_file}")
             return File.from_stat_data(
@@ -468,24 +409,11 @@ class _sftpClient(_BaseClient):
             )
         except OSError:
             logger.error(
-                f"Unable to retrieve file data for {file}: {sys.exc_info()[1]}"
+                f"Unable to retrieve file data for {remote_file}: {sys.exc_info()[1]}"
             )
             raise
 
-    def is_active(self) -> bool:
-        """
-        Checks if connection to server is active.
-
-        Returns:
-            bool: True if connection is active, False otherwise
-        """
-        channel = self.connection.get_channel()
-        if channel is None or channel is not None and channel.closed:
-            return False
-        else:
-            return True
-
-    def list_remote_file_data(self, remote_dir: str) -> List[File]:
+    def get_remote_file_list(self, remote_dir: str) -> List[File]:
         """
         Lists metadata for each file in `remote_dir` on server.
 
@@ -510,35 +438,51 @@ class _sftpClient(_BaseClient):
             )
             raise
 
-    def upload_file(self, file: str, remote_dir: str, local_dir: str) -> File:
+    def is_active(self) -> bool:
         """
-        Upload file from `local_dir` to `remote_dir` on server.
-
-        Args:
-            file:
-                name of file to upload
-            remote_dir:
-                remote directory to upload file to
-            local_dir:
-                local directory to upload file from
+        Checks if connection to server is active.
 
         Returns:
-            uploaded file as `File` object
+            bool: True if connection is active, False otherwise
+        """
+        channel = self.connection.get_channel()
+        if channel is None or channel is not None and channel.closed:
+            return False
+        else:
+            return True
+
+    def write_file(self, fh: io.BytesIO, file: str, dir: str, remote: bool) -> File:
+        """
+        Writes fetched file to directory. If `remote` is True, then file is written
+        to server. If `remote` is False, then file is written to local directory.
+
+        Args:
+            fh:
+                `io.BytesIO` object representing file to write
+            file:
+                name of file to write
+            dir:
+                directory to write file to
+            remote:
+                bool indicating if file should be written to remote or local directory
+
+        Returns:
+            `File` object representing written file
 
         Raises:
-            OSError:
-                if unable to upload file to remote directory or if file is not found.
-
+            OSError: if unable to write file to directory
         """
-        local_file = os.path.normpath(os.path.join(local_dir, file))
         try:
-            logger.debug(f"Uploading {local_file} to {remote_dir} via SFTP client")
-            uploaded_file = self.connection.put(
-                local_file, f"{remote_dir}/{file}", confirm=True
-            )
-            return File.from_stat_data(uploaded_file, file_name=file)
+            if remote:
+                self.connection.chdir(dir)
+                written_file = self.connection.putfo(fh, remotepath=file)
+                self.connection.chdir(path=None)
+                return File.from_stat_data(written_file, file_name=file)
+            else:
+                local_file = f"{dir}/{file}"
+                with open(local_file, "wb") as lf:
+                    lf.write(fh.getbuffer())
+                return File.from_stat_data(os.stat(local_file), file)
         except OSError:
-            logger.error(
-                f"Unable to upload {local_file} to {remote_dir}: {sys.exc_info()[1]}"
-            )
+            logger.error(f"Unable to write {file} to {dir}: {sys.exc_info()[1]}")
             raise

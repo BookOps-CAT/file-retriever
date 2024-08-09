@@ -76,9 +76,6 @@ class MockFTP:
     def nlst(self, *args, **kwargs) -> List[str]:
         return ["foo.mrc"]
 
-    def putline(self, *args, **kwargs) -> None:
-        pass
-
     def retrbinary(self, *args, **kwargs) -> bytes:
         file = b"00000"
         return args[1](file)
@@ -103,6 +100,9 @@ class MockFTP:
 class MockSFTPClient:
     """Mock response from SFTP for a successful login"""
 
+    def chdir(self, *args, **kwargs) -> None:
+        pass
+
     def close(self, *args, **kwargs) -> None:
         pass
 
@@ -119,6 +119,9 @@ class MockSFTPClient:
         return [MockFileData().create_SFTPAttributes()]
 
     def put(self, *args, **kwargs) -> paramiko.SFTPAttributes:
+        return MockFileData().create_SFTPAttributes()
+
+    def putfo(self, *args, **kwargs) -> paramiko.SFTPAttributes:
         return MockFileData().create_SFTPAttributes()
 
     def stat(self, *args, **kwargs) -> paramiko.SFTPAttributes:
@@ -153,7 +156,7 @@ def stub_client(monkeypatch):
 
 
 @pytest.fixture
-def mock_ftpClient_sftpClient(monkeypatch, mock_open_file, stub_client):
+def mock_ftpClient_sftpClient(monkeypatch, mock_open_file, stub_client, mock_file_data):
     def mock_ftp_client(*args, **kwargs):
         return MockFTP()
 
@@ -165,12 +168,12 @@ def mock_ftpClient_sftpClient(monkeypatch, mock_open_file, stub_client):
 
 
 @pytest.fixture
-def mock_Client(monkeypatch, mock_ftpClient_sftpClient, mock_file_data):
+def mock_Client(monkeypatch, mock_ftpClient_sftpClient):
     def mock_file_exists(*args, **kwargs):
         return False
 
     monkeypatch.setattr(os.path, "exists", mock_file_exists)
-    monkeypatch.setattr(Client, "check_file", mock_file_exists)
+    monkeypatch.setattr(Client, "file_exists", mock_file_exists)
 
 
 @pytest.fixture
@@ -225,7 +228,9 @@ def mock_file_error(monkeypatch, mock_open_file, mock_ftpClient_sftpClient):
     monkeypatch.setattr(MockSFTPClient, "get", mock_os_error)
     monkeypatch.setattr(MockSFTPClient, "getfo", mock_os_error)
     monkeypatch.setattr(MockSFTPClient, "put", mock_os_error)
+    monkeypatch.setattr(MockSFTPClient, "putfo", mock_os_error)
     monkeypatch.setattr(MockSFTPClient, "listdir_attr", mock_os_error)
+    monkeypatch.setattr(os, "stat", mock_os_error)
 
 
 @pytest.fixture
@@ -303,4 +308,6 @@ def NSDROP_creds() -> Dict[str, str]:
             "password": data["NSDROP_PASSWORD"],
             "host": data["NSDROP_HOST"],
             "port": "22",
+            "vendor": "nsdrop",
+            "remote_dir": ".",
         }
