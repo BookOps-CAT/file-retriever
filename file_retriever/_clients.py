@@ -7,6 +7,7 @@ Can be used to connect to vendor servers or internal network drives.
 
 from abc import ABC, abstractmethod
 import ftplib
+import io
 import logging
 import os
 import paramiko
@@ -44,6 +45,10 @@ class _BaseClient(ABC):
 
     @abstractmethod
     def download_file(self, file: str, remote_dir: str, local_dir: str) -> None:
+        pass
+
+    @abstractmethod
+    def fetch_file(self, file: str, remote_dir: str) -> io.BytesIO:
         pass
 
     @abstractmethod
@@ -143,22 +148,51 @@ class _ftpClient(_BaseClient):
             None
 
         Raises:
-            OSError: if unable to download file from server or if file is not found
+            ftplib.error_perm:
+                if unable to download file from server due to permissions error
         """
         local_file = os.path.normpath(os.path.join(local_dir, file))
-        remote_file = os.path.normpath(os.path.join(remote_dir, file))
         try:
-            logger.debug(f"Downloading {remote_file} to {local_file} via FTP client")
+            logger.debug(
+                f"Downloading {file} from {remote_dir} to {local_file} via FTP client"
+            )
+            self.connection.cwd(remote_dir)
             with open(local_file, "wb") as f:
-                self.connection.retrbinary(f"RETR {remote_file}", f.write)
-        except OSError:
+                self.connection.retrbinary(f"RETR {file}", f.write)
+        except ftplib.error_perm:
             logger.error(
-                f"Unable to download {remote_file} to {local_file}: {sys.exc_info()[1]}"
+                f"Unable to download {file} from {remote_dir} to {local_file}: "
+                f"{sys.exc_info()[1]}"
             )
             raise
-        except ftplib.error_reply:
+
+    def fetch_file(self, file: str, remote_dir: str) -> io.BytesIO:
+        """
+        Fetches `file` from `remote_dir` on server and creates. File
+        is loaded as `io.BytesIO` object to be written with `write_local_file`
+        or `write_remote_file`.
+
+        Args:
+            file:
+                name of file to fetch
+            remote_dir:
+                remote directory to fetch file from
+
+        Returns:
+            io.BytesIO
+
+        Raises:
+            if unable to download file from server due to permissions error
+        """
+        try:
+            self.connection.cwd(remote_dir)
+            fh = io.BytesIO()
+            logger.debug(f"Fetching {file} from {remote_dir}")
+            self.connection.retrbinary(f"RETR {file}", fh.write)
+            return fh
+        except ftplib.error_perm:
             logger.error(
-                f"Received unexpected response from server: {sys.exc_info()[1]}"
+                f"Unable to retrieve {file} from {remote_dir}: {sys.exc_info()[1]}"
             )
             raise
 
@@ -174,9 +208,8 @@ class _ftpClient(_BaseClient):
             `File` object representing file in `remote_dir`
 
         Raises:
-            ftplib.error_reply:
-                if `file` or `remote_dir` does not exist or if server response
-                code is not in range 200-299
+            ftplib.error_perm:
+                if unable to retrieve file data due to permissions error
         """
         if remote_dir is not None:
             remote_file = f"{remote_dir}/{file}"
@@ -195,7 +228,7 @@ class _ftpClient(_BaseClient):
             if permissions is None:
                 logger.error(f"{file} not found on server.")
                 raise ftplib.error_perm("File not found on server.")
-            logger.debug(f"Retrieving file data for {remote_file}")
+            # logger.debug(f"Retrieving file data for {remote_file}")
             return File(
                 file_name=file_name,
                 file_size=self.connection.size(remote_file),
@@ -204,11 +237,6 @@ class _ftpClient(_BaseClient):
                 ),
                 file_mode=permissions,
             )
-        except ftplib.error_reply:
-            logger.error(
-                f"Received unexpected response from server: {sys.exc_info()[1]}"
-            )
-            raise
         except ftplib.error_perm:
             logger.error(
                 f"Unable to retrieve file data for {file}: {sys.exc_info()[1]}"
@@ -237,11 +265,12 @@ class _ftpClient(_BaseClient):
 
         Returns:
             list of `File` objects representing files in `remote_dir`
+            returns an empty list if `remote_dir` is empty or does not exist
 
         Raises:
-            ftplib.error_reply:
-                if `remote_dir` does not exist or if server response code is
-                not in range 200-299
+            ftplib.error_perm:
+                if unable to list file data due to permissions error
+
         """
         files = []
         try:
@@ -249,7 +278,7 @@ class _ftpClient(_BaseClient):
             for data in file_data_list:
                 file = self.get_remote_file_data(data)
                 files.append(file)
-        except ftplib.error_reply:
+        except ftplib.error_perm:
             logger.error(
                 f"Unable to retrieve file data for {remote_dir}: {sys.exc_info()[1]}"
             )
@@ -273,10 +302,8 @@ class _ftpClient(_BaseClient):
             uploaded file as `File` object
 
         Raises:
-            OSError:
-                if unable to upload file to remote directory or if file is not found.
-            ftplib.error_reply:
-                if server response code is not in range 200-299
+            ftplib.error_perm:
+                if unable to upload file due to permissions error.
         """
         local_file = os.path.normpath(os.path.join(local_dir, file))
         remote_file = os.path.normpath(os.path.join(remote_dir, file))
@@ -285,14 +312,9 @@ class _ftpClient(_BaseClient):
             with open(remote_file, "rb") as rf:
                 self.connection.storbinary(f"STOR {local_file}", rf)
             return self.get_remote_file_data(file, remote_dir)
-        except OSError:
+        except ftplib.error_perm:
             logger.error(
                 f"Unable to upload {local_file} to {remote_dir}: {sys.exc_info()[1]}"
-            )
-            raise
-        except ftplib.error_reply:
-            logger.error(
-                f"Received unexpected response from server: {sys.exc_info()[1]}"
             )
             raise
 
@@ -386,10 +408,39 @@ class _sftpClient(_BaseClient):
         remote_file = os.path.normpath(os.path.join(remote_dir, file))
         try:
             logger.debug(f"Downloading {remote_file} to {local_file} via SFTP client")
-            self.connection.get(remote_file, local_file)
+            self.connection.get(remotepath=remote_file, localpath=local_file)
         except OSError:
             logger.error(
                 f"Unable to download {remote_file} to {local_file}: {sys.exc_info()[1]}"
+            )
+            raise
+
+    def fetch_file(self, file: str, remote_dir: str) -> io.BytesIO:
+        """
+        Fetches `file` from `remote_dir` on server. File is loaded as `io.BytesIO`
+        object to be written with `write_local_file` or `write_remote_file` method.
+
+        Args:
+            file:
+                name of file to fetch
+            remote_dir:
+                remote directory to fetch file from
+
+        Returns:
+            io.BytesIO
+
+        Raises:
+            OSError: if unable to download file from server or if file is not found
+        """
+        remote_file = os.path.normpath(os.path.join(remote_dir, file))
+        try:
+            fh = io.BytesIO()
+            logger.debug(f"Fetching {file} from {remote_dir}")
+            self.connection.getfo(remotepath=remote_file, fl=fh)
+            return fh
+        except OSError:
+            logger.error(
+                f"Unable to retrieve {file} from {remote_dir}: {sys.exc_info()[1]}"
             )
             raise
 
@@ -405,7 +456,7 @@ class _sftpClient(_BaseClient):
             `File` object representing file in `remote_dir`
 
         Raises:
-            ftplib.error_reply:
+            OSError:
                 if `file` or `remote_dir` does not exist or if server response
                 code is not in range 200-299
         """

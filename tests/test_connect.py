@@ -231,13 +231,24 @@ class TestMockClient:
             file_atime=None,
         )
 
-    @pytest.mark.parametrize("port", [21, 22])
-    def test_Client_get_file_not_found(self, mock_file_error, stub_creds, port):
+    def test_Client_ftp_get_file_permissions_error(self, mock_file_error, stub_creds):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
             stub_creds["vendor"],
-        ) = (port, "testdir", "test")
+        ) = (21, "testdir", "test")
+        connect = Client(**stub_creds)
+        with pytest.raises(ftplib.error_perm):
+            connect.get_file(
+                "foo.mrc", remote_dir="bar_dir", local_dir="baz_dir", check=False
+            )
+
+    def test_Client_sftp_get_file_not_found(self, mock_file_error, stub_creds):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (22, "testdir", "test")
         connect = Client(**stub_creds)
         with pytest.raises(OSError):
             connect.get_file(
@@ -310,13 +321,24 @@ class TestMockClient:
             file_atime=None,
         )
 
-    @pytest.mark.parametrize("port", [21, 22])
-    def test_Client_put_file_not_found(self, mock_file_error, stub_creds, port):
+    def test_Client_ftp_put_file_not_found(self, mock_file_error, stub_creds):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
             stub_creds["vendor"],
-        ) = (port, "testdir", "test")
+        ) = (21, "testdir", "test")
+        connect = Client(**stub_creds)
+        with pytest.raises(ftplib.error_perm):
+            connect.put_file(
+                "foo.mrc", remote_dir="bar_dir", local_dir="baz_dir", check=False
+            )
+
+    def test_Client_sftp_put_file_not_found(self, mock_file_error, stub_creds):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["vendor"],
+        ) = (22, "testdir", "test")
         connect = Client(**stub_creds)
         with pytest.raises(OSError):
             connect.put_file(

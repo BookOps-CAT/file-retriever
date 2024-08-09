@@ -1,11 +1,14 @@
 from contextlib import nullcontext as does_not_raise
 import datetime
 import ftplib
+import logging
+import logging.config
 import os
 import paramiko
 import pytest
 from file_retriever._clients import _ftpClient, _sftpClient, _BaseClient
 from file_retriever.file import File
+from file_retriever.utils import logger_config
 
 
 def test_BaseClient():
@@ -14,6 +17,7 @@ def test_BaseClient():
     assert ftp_bc.__dict__ == {"connection": None}
     assert ftp_bc.close() is None
     assert ftp_bc.download_file("foo.mrc", "bar", "baz") is None
+    assert ftp_bc.fetch_file("foo.mrc", "bar") is None
     assert ftp_bc.get_remote_file_data("foo.mrc", "bar") is None
     assert ftp_bc.is_active() is None
     assert ftp_bc.list_remote_file_data("foo") is None
@@ -57,17 +61,25 @@ class TestMock_ftpClient:
 
     def test_ftpClient_download_file_not_found(self, mock_file_error, stub_creds):
         stub_creds["port"] = "21"
-        with pytest.raises(OSError):
+        with pytest.raises(ftplib.error_perm):
             ftp = _ftpClient(**stub_creds)
             ftp.download_file(file="foo.mrc", remote_dir="bar", local_dir="test")
 
-    def test_ftpClient_download_connection_error(
-        self, mock_connection_error_reply, stub_creds
-    ):
+    def test_ftpClient_fetch_file(self, mock_ftpClient_sftpClient, stub_creds):
+        config = logger_config()
+        logging.config.dictConfig(config)
+        logging.getLogger("file_retriever")
+
         stub_creds["port"] = "21"
-        with pytest.raises(ftplib.error_reply):
+        ftp = _ftpClient(**stub_creds)
+        fh = ftp.fetch_file(file="foo.mrc", remote_dir="bar")
+        assert fh.getvalue()[0:1] == b"0"
+
+    def test_ftpClient_fetch_file_permissions_error(self, mock_file_error, stub_creds):
+        stub_creds["port"] = "21"
+        with pytest.raises(ftplib.error_perm):
             ftp = _ftpClient(**stub_creds)
-            ftp.download_file(file="foo.mrc", remote_dir="bar", local_dir="test")
+            ftp.fetch_file(file="foo.mrc", remote_dir="bar")
 
     def test_ftpClient_get_remote_file_data(
         self, mock_ftpClient_sftpClient, stub_creds
@@ -85,24 +97,8 @@ class TestMock_ftpClient:
             file_atime=None,
         )
 
-    def test_ftpClient_get_remote_file_data_connection_error(
-        self, mock_connection_error_reply, stub_creds
-    ):
-        stub_creds["port"] = "21"
-        ftp = _ftpClient(**stub_creds)
-        with pytest.raises(ftplib.error_reply):
-            ftp.get_remote_file_data("foo.mrc", "testdir")
-
-    def test_ftpClient_get_remote_file_data_not_found(
+    def test_ftpClient_get_remote_file_data_permissions_error(
         self, mock_file_error, stub_creds
-    ):
-        stub_creds["port"] = "21"
-        ftp = _ftpClient(**stub_creds)
-        with pytest.raises(ftplib.error_perm):
-            ftp.get_remote_file_data("foo.mrc", "testdir")
-
-    def test_ftpClient_get_remote_file_data_non_permissions(
-        self, mock_permissions_error, stub_creds
     ):
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
@@ -139,12 +135,12 @@ class TestMock_ftpClient:
             )
         ]
 
-    def test_ftpClient_list_remote_file_data_connection_error(
-        self, mock_connection_error_reply, stub_creds
+    def test_ftpClient_list_remote_file_data_permissions_error(
+        self, mock_file_error, stub_creds
     ):
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
-        with pytest.raises(ftplib.error_reply):
+        with pytest.raises(ftplib.error_perm):
             ftp.list_remote_file_data("testdir")
 
     def test_ftpClient_upload_file(self, mock_ftpClient_sftpClient, stub_creds):
@@ -155,16 +151,8 @@ class TestMock_ftpClient:
 
     def test_ftpClient_upload_file_not_found(self, mock_file_error, stub_creds):
         stub_creds["port"] = "21"
-        with pytest.raises(OSError):
-            ftp = _ftpClient(**stub_creds)
-            ftp.upload_file(file="foo.mrc", remote_dir="foo", local_dir="bar")
-
-    def test_ftpClient_upload_connection_error(
-        self, mock_connection_error_reply, stub_creds
-    ):
-        stub_creds["port"] = "21"
-        with pytest.raises(ftplib.error_reply):
-            ftp = _ftpClient(**stub_creds)
+        ftp = _ftpClient(**stub_creds)
+        with pytest.raises(ftplib.error_perm):
             ftp.upload_file(file="foo.mrc", remote_dir="foo", local_dir="bar")
 
 
@@ -186,7 +174,7 @@ class TestMock_sftpClient:
         with pytest.raises(paramiko.AuthenticationException):
             _sftpClient(**stub_creds)
 
-    def test_sftpclient_error_reply(self, mock_login_connection_error, stub_creds):
+    def test_sftpclient_SSHException(self, mock_login_connection_error, stub_creds):
         stub_creds["port"] = "22"
         with pytest.raises(paramiko.SSHException):
             _sftpClient(**stub_creds)
@@ -208,6 +196,22 @@ class TestMock_sftpClient:
         sftp = _sftpClient(**stub_creds)
         with pytest.raises(OSError):
             sftp.download_file(file="foo.mrc", remote_dir="bar", local_dir="test")
+
+    def test_sftpClient_fetch_file(self, mock_ftpClient_sftpClient, stub_creds):
+        config = logger_config()
+        logging.config.dictConfig(config)
+        logging.getLogger("file_retriever")
+
+        stub_creds["port"] = "22"
+        sftp = _sftpClient(**stub_creds)
+        fh = sftp.fetch_file(file="foo.mrc", remote_dir="bar")
+        assert fh.getvalue()[0:1] == b"0"
+
+    def test_sftpClient_fetch_file_not_found(self, mock_file_error, stub_creds):
+        stub_creds["port"] = "22"
+        sftp = _sftpClient(**stub_creds)
+        with pytest.raises(OSError):
+            sftp.fetch_file(file="foo.mrc", remote_dir="bar")
 
     def test_sftpClient_get_remote_file_data(
         self, mock_ftpClient_sftpClient, stub_creds
@@ -311,6 +315,13 @@ class TestLiveClients:
             _ftpClient(**live_ftp_creds)
         assert "Login incorrect" in str(exc)
 
+    def test_ftpClient_fetch_file_live(self, live_ftp_creds):
+        remote_dir = live_ftp_creds["remote_dir"]
+        del live_ftp_creds["remote_dir"], live_ftp_creds["vendor"]
+        live_ftp = _ftpClient(**live_ftp_creds)
+        downloaded_file = live_ftp.fetch_file("31878.mrc", remote_dir)
+        assert downloaded_file.getvalue()[0:1] == b"0"
+
     def test_sftpClient_live_test(self, live_sftp_creds):
         remote_dir = live_sftp_creds["remote_dir"]
         del live_sftp_creds["remote_dir"], live_sftp_creds["vendor"]
@@ -350,3 +361,10 @@ class TestLiveClients:
         )
         assert ev_files[0].file_name in os.listdir(local_test_dir)
         assert ev_files[0].file_name == nsdrop_file.file_name
+
+    def test_sftpClient_fetch_file_live(self, live_sftp_creds):
+        remote_dir = live_sftp_creds["remote_dir"]
+        del live_sftp_creds["remote_dir"], live_sftp_creds["vendor"]
+        live_sftp = _sftpClient(**live_sftp_creds)
+        downloaded_file = live_sftp.fetch_file("20049552_NYPL.mrc", remote_dir)
+        assert downloaded_file.getvalue()[0:1] == b"0"

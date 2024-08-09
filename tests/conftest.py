@@ -1,5 +1,6 @@
 import datetime
 import ftplib
+import logging
 import os
 import paramiko
 from typing import Dict, List
@@ -7,6 +8,8 @@ import yaml
 import pytest
 from file_retriever._clients import _ftpClient, _sftpClient, _BaseClient
 from file_retriever.connect import Client
+
+logger = logging.getLogger("file_retriever")
 
 
 class FakeUtcNow(datetime.datetime):
@@ -67,11 +70,18 @@ class MockFTP:
     def close(self, *args, **kwargs) -> None:
         pass
 
+    def cwd(self, *args, **kwargs) -> None:
+        pass
+
     def nlst(self, *args, **kwargs) -> List[str]:
         return ["foo.mrc"]
 
-    def retrbinary(self, *args, **kwargs) -> None:
+    def putline(self, *args, **kwargs) -> None:
         pass
+
+    def retrbinary(self, *args, **kwargs) -> bytes:
+        file = b"00000"
+        return args[1](file)
 
     def retrlines(self, *args, **kwargs) -> str:
         files = "-rw-r--r--    1 0        0          140401 Jan  1 00:01 foo.mrc"
@@ -96,11 +106,14 @@ class MockSFTPClient:
     def close(self, *args, **kwargs) -> None:
         pass
 
-    def get(self, *args, **kwargs) -> None:
-        open(args[1], "x+")
+    def get(self, remotepath, localpath, *args, **kwargs) -> None:
+        open(localpath, "x+")
 
     def get_channel(self, *args, **kwargs) -> MockChannel:
         return MockChannel()
+
+    def getfo(self, remotepath, fl, *args, **kwargs) -> bytes:
+        return fl.write(b"00000")
 
     def listdir_attr(self, *args, **kwargs) -> List[paramiko.SFTPAttributes]:
         return [MockFileData().create_SFTPAttributes()]
@@ -193,14 +206,6 @@ def mock_login_connection_error(monkeypatch, stub_client):
 
 
 @pytest.fixture
-def mock_permissions_error(monkeypatch, mock_open_file, stub_client):
-    def mock_retrlines(*args, **kwargs):
-        return None
-
-    monkeypatch.setattr(ftplib.FTP, "retrlines", mock_retrlines)
-
-
-@pytest.fixture
 def mock_file_error(monkeypatch, mock_open_file, mock_ftpClient_sftpClient):
     def mock_os_error(*args, **kwargs):
         raise OSError
@@ -214,10 +219,11 @@ def mock_file_error(monkeypatch, mock_open_file, mock_ftpClient_sftpClient):
     monkeypatch.setattr(MockFTP, "voidcmd", mock_ftp_error_perm)
     monkeypatch.setattr(MockFTP, "size", mock_ftp_error_perm)
     monkeypatch.setattr(MockFTP, "retrlines", mock_retrlines)
-    monkeypatch.setattr(MockFTP, "retrbinary", mock_os_error)
-    monkeypatch.setattr(MockFTP, "storbinary", mock_os_error)
+    monkeypatch.setattr(MockFTP, "retrbinary", mock_ftp_error_perm)
+    monkeypatch.setattr(MockFTP, "storbinary", mock_ftp_error_perm)
     monkeypatch.setattr(MockSFTPClient, "stat", mock_os_error)
     monkeypatch.setattr(MockSFTPClient, "get", mock_os_error)
+    monkeypatch.setattr(MockSFTPClient, "getfo", mock_os_error)
     monkeypatch.setattr(MockSFTPClient, "put", mock_os_error)
     monkeypatch.setattr(MockSFTPClient, "listdir_attr", mock_os_error)
 
