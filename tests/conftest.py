@@ -276,7 +276,7 @@ def live_ftp_creds() -> Dict[str, str]:
             "password": data["LEILA_PASSWORD"],
             "host": data["LEILA_HOST"],
             "port": data["LEILA_PORT"],
-            "vendor": "leila",
+            "name": "leila",
             "remote_dir": data["LEILA_SRC"],
         }
 
@@ -292,7 +292,7 @@ def live_sftp_creds() -> Dict[str, str]:
             "password": data["EASTVIEW_PASSWORD"],
             "host": data["EASTVIEW_HOST"],
             "port": data["EASTVIEW_PORT"],
-            "vendor": "eastview",
+            "name": "eastview",
             "remote_dir": data["EASTVIEW_SRC"],
         }
 
@@ -307,7 +307,7 @@ def NSDROP_creds() -> Dict[str, str]:
             "username": data["NSDROP_USER"],
             "password": data["NSDROP_PASSWORD"],
             "host": data["NSDROP_HOST"],
-            "port": "22",
-            "vendor": "nsdrop",
-            "remote_dir": ".",
+            "port": data["NSDROP_PORT"],
+            "name": "nsdrop",
+            "remote_dir": data["NSDROP_SRC"],
         }

@@ -34,10 +34,10 @@ class TestMockClient:
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
-            stub_creds["vendor"],
+            stub_creds["name"],
         ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
-        assert connect.vendor == "test"
+        assert connect.name == "test"
         assert connect.host == "ftp.testvendor.com"
         assert connect.port == port
         assert connect.remote_dir == "testdir"
@@ -47,7 +47,7 @@ class TestMockClient:
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
-            stub_creds["vendor"],
+            stub_creds["name"],
         ) = (1, "testdir", "test")
         with pytest.raises(ValueError) as e:
             Client(**stub_creds)
@@ -57,7 +57,7 @@ class TestMockClient:
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
-            stub_creds["vendor"],
+            stub_creds["name"],
         ) = (21, "testdir", "test")
         with pytest.raises(ftplib.error_perm):
             Client(**stub_creds)
@@ -66,7 +66,7 @@ class TestMockClient:
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
-            stub_creds["vendor"],
+            stub_creds["name"],
         ) = (22, "testdir", "test")
         with pytest.raises(paramiko.AuthenticationException):
             Client(**stub_creds)
@@ -79,7 +79,7 @@ class TestMockClient:
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
-            stub_creds["vendor"],
+            stub_creds["name"],
         ) = (port, "testdir", "test")
         with Client(**stub_creds) as connect:
             assert connect.session is not None
@@ -92,7 +92,7 @@ class TestMockClient:
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
-            stub_creds["vendor"],
+            stub_creds["name"],
         ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
         live_connection = connect.check_connection()
@@ -108,7 +108,7 @@ class TestMockClient:
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
-            stub_creds["vendor"],
+            stub_creds["name"],
         ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
         file_exists = connect.file_exists(file="foo.mrc", dir="bar", remote=False)
@@ -124,7 +124,7 @@ class TestMockClient:
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
-            stub_creds["vendor"],
+            stub_creds["name"],
         ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
         file_exists = connect.file_exists(file="foo.mrc", dir="bar", remote=True)
@@ -134,7 +134,7 @@ class TestMockClient:
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
-            stub_creds["vendor"],
+            stub_creds["name"],
         ) = (22, "testdir", "test")
         connect = Client(**stub_creds)
         file_exists = connect.file_exists(file="foo.mrc", dir="bar", remote=True)
@@ -148,7 +148,7 @@ class TestMockClient:
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
-            stub_creds["vendor"],
+            stub_creds["name"],
         ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
         file = connect.get_file_info(file="foo.mrc", remote_dir=dir)
@@ -166,7 +166,7 @@ class TestMockClient:
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
-            stub_creds["vendor"],
+            stub_creds["name"],
         ) = (21, "testdir", "test")
         connect = Client(**stub_creds)
         with pytest.raises(ftplib.error_perm):
@@ -176,7 +176,7 @@ class TestMockClient:
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
-            stub_creds["vendor"],
+            stub_creds["name"],
         ) = (22, "testdir", "test")
         connect = Client(**stub_creds)
         with pytest.raises(OSError):
@@ -187,7 +187,7 @@ class TestMockClient:
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
-            stub_creds["vendor"],
+            stub_creds["name"],
         ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
         all_files = connect.list_remote_dir()
@@ -211,7 +211,7 @@ class TestMockClient:
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
-            stub_creds["vendor"],
+            stub_creds["name"],
         ) = (21, "testdir", "test")
         connect = Client(**stub_creds)
         with pytest.raises(ftplib.error_reply):
@@ -221,7 +221,7 @@ class TestMockClient:
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
-            stub_creds["vendor"],
+            stub_creds["name"],
         ) = (22, "testdir", "test")
         connect = Client(**stub_creds)
         with pytest.raises(OSError):
@@ -235,7 +235,7 @@ class TestMockClient:
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
-            stub_creds["vendor"],
+            stub_creds["name"],
         ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
         downloaded_file = connect.get_file("foo.mrc", remote_dir=dir)
@@ -245,7 +245,7 @@ class TestMockClient:
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
-            stub_creds["vendor"],
+            stub_creds["name"],
         ) = (21, "testdir", "test")
         connect = Client(**stub_creds)
         with pytest.raises(ftplib.error_perm):
@@ -255,7 +255,7 @@ class TestMockClient:
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
-            stub_creds["vendor"],
+            stub_creds["name"],
         ) = (22, "testdir", "test")
         connect = Client(**stub_creds)
         with pytest.raises(OSError):
@@ -269,7 +269,7 @@ class TestMockClient:
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
-            stub_creds["vendor"],
+            stub_creds["name"],
         ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
         fetched_file = io.BytesIO(b"0")
@@ -288,7 +288,7 @@ class TestMockClient:
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
-            stub_creds["vendor"],
+            stub_creds["name"],
         ) = (21, "testdir", "test")
         connect = Client(**stub_creds)
         fetched_file = io.BytesIO(b"0")
@@ -303,7 +303,7 @@ class TestMockClient:
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
-            stub_creds["vendor"],
+            stub_creds["name"],
         ) = (21, "testdir", "test")
         connect = Client(**stub_creds)
         fetched_file = io.BytesIO(b"0")
@@ -320,7 +320,7 @@ class TestMockClient:
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
-            stub_creds["vendor"],
+            stub_creds["name"],
         ) = (22, "testdir", "test")
         connect = Client(**stub_creds)
         fetched_file = io.BytesIO(b"0")
@@ -339,7 +339,7 @@ class TestMockClient:
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
-            stub_creds["vendor"],
+            stub_creds["name"],
         ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
         fetched_file = io.BytesIO(b"0")

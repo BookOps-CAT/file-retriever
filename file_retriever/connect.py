@@ -23,7 +23,7 @@ class Client:
 
     def __init__(
         self,
-        vendor: str,
+        name: str,
         username: str,
         password: str,
         host: str,
@@ -33,15 +33,14 @@ class Client:
         """Initializes client instance.
 
         Args:
-            vendor: name of vendor
+            name: name of server or vendor (eg. 'leila', 'nsdrop')
             username: username for server
             password: password for server
             host: server address
             port: port number for server
             remote_dir: directory on server to interact with
         """
-
-        self.vendor = vendor
+        self.name = name
         self.host = host
         self.port = port
         self.remote_dir = remote_dir
