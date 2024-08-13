@@ -163,8 +163,8 @@ class TestMockClient:
             multiple_files[1].file_stream,
             multiple_files[2].file_stream,
         ) = (io.BytesIO(b"0"), io.BytesIO(b"1"), io.BytesIO(b"2"))
-        file = connect.get_file(single_file, remote_dir=dir)
-        files = connect.get_file(multiple_files, remote_dir=dir)
+        file = connect.get_file(files=single_file, remote_dir=dir)
+        files = connect.get_file(files=multiple_files, remote_dir=dir)
         assert isinstance(file, File)
         assert len(files) == 3
         assert all(isinstance(f, File) for f in files)
@@ -180,7 +180,7 @@ class TestMockClient:
         connect = Client(**stub_creds)
         file_obj = File.from_fileinfo(file=mock_file_info, file_stream=io.BytesIO(b"0"))
         with pytest.raises(ftplib.error_perm):
-            connect.get_file(file_obj, remote_dir="bar_dir")
+            connect.get_file(files=file_obj, remote_dir="bar_dir")
 
     def test_Client_sftp_get_file_not_found(
         self, mock_file_error, mock_file_info, stub_creds
@@ -193,7 +193,7 @@ class TestMockClient:
         connect = Client(**stub_creds)
         file_obj = File.from_fileinfo(file=mock_file_info, file_stream=io.BytesIO(b"0"))
         with pytest.raises(OSError):
-            connect.get_file(file_obj, remote_dir="bar_dir")
+            connect.get_file(files=file_obj, remote_dir="bar_dir")
 
     @pytest.mark.parametrize(
         "port, dir, uid_gid",
@@ -234,7 +234,7 @@ class TestMockClient:
         ) = (22, "testdir", "test")
         connect = Client(**stub_creds)
         with pytest.raises(OSError):
-            connect.get_file_info("foo.mrc", "testdir")
+            connect.get_file_info(file="foo.mrc", remote_dir="testdir")
 
     @pytest.mark.parametrize("port, uid_gid", [(21, None), (22, 0)])
     def test_Client_list_file_info(self, mock_Client, stub_creds, port, uid_gid):
