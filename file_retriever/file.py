@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 import datetime
 import io
 import os
@@ -6,18 +5,33 @@ import paramiko
 from typing import Optional, Union
 
 
-@dataclass
 class FileInfo:
-    """A dataclass to store file information."""
+    """A class to store file information."""
 
-    file_name: str
-    file_mtime: float
-    file_size: Optional[int] = None
-    file_uid: Optional[int] = None
-    file_gid: Optional[int] = None
-    file_atime: Optional[float] = None
-    file_mode: Optional[int] = None
-    file_stream: Optional[io.BytesIO] = None
+    def __init__(
+        self,
+        file_name: str,
+        file_mtime: Union[float, int, str],
+        file_mode: Union[str, int],
+        file_size: Optional[int] = None,
+        file_uid: Optional[int] = None,
+        file_gid: Optional[int] = None,
+        file_atime: Optional[float] = None,
+    ):
+        self.file_name = file_name
+        self.file_size = file_size
+        self.file_uid = file_uid
+        self.file_gid = file_gid
+        self.file_atime = file_atime
+        if isinstance(file_mtime, str):
+            self.file_mtime = self.__parse_mdtm_time(file_mtime)
+        else:
+            self.file_mtime = int(file_mtime)
+
+        if isinstance(file_mode, str):
+            self.file_mode = self.__parse_permissions(file_mode)
+        else:
+            self.file_mode = int(file_mode)
 
     @classmethod
     def from_stat_data(
@@ -38,46 +52,59 @@ class FileInfo:
         Returns:
             `FileInfo` object
         """
-        if file_name is not None:
-            filename = file_name
-        elif (
-            isinstance(data, paramiko.SFTPAttributes)
-            and hasattr(data, "filename") is True
-        ):
-            filename = data.filename
-        elif (
-            isinstance(data, paramiko.SFTPAttributes)
-            and hasattr(data, "longname") is True
-        ):
-            filename = data.longname[56:]
-        else:
-            raise AttributeError("No filename provided")
+        match data, file_name:
+            case data, file_name if file_name is not None:
+                file_name = file_name
+            case data, None if isinstance(data, paramiko.SFTPAttributes) and hasattr(
+                data, "filename"
+            ) and data.filename is not None:
+                file_name = data.filename
+            case data, None if isinstance(data, paramiko.SFTPAttributes) and hasattr(
+                data, "longname"
+            ) and data.longname is not None:
+                file_name = data.longname[56:]
+            case _:
+                raise AttributeError("No filename provided")
 
-        if not hasattr(data, "st_mtime") or data.st_mtime is None:
-            raise AttributeError("No file modification time provided")
+        match data.st_mode:
+            case data.st_mode if isinstance(data.st_mode, int):
+                mode: Union[str, int] = data.st_mode
+            case data.st_mode if isinstance(
+                data, paramiko.SFTPAttributes
+            ) and data.st_mode is None and hasattr(
+                data, "longname"
+            ) and data.longname is not None:
+                mode = data.longname[0:10]
+            case _:
+                raise AttributeError("No file mode provided")
+
+        match data:
+            case data if hasattr(
+                data, "st_mtime"
+            ) and data.st_mtime is not None and isinstance(data.st_mtime, float | int):
+                st_mtime = data.st_mtime
+            case _:
+                raise AttributeError("No file modification time provided")
 
         return cls(
-            file_name=filename,
-            file_mtime=data.st_mtime,
+            file_name=file_name,
+            file_mtime=st_mtime,
+            file_mode=mode,
             file_size=data.st_size,
             file_uid=data.st_uid,
             file_gid=data.st_gid,
             file_atime=data.st_atime,
-            file_mode=data.st_mode,
-            file_stream=None,
         )
 
-    @staticmethod
-    def parse_mdtm_time(mdtm_time: str) -> int:
+    def __parse_mdtm_time(self, mdtm_time: str) -> int:
         """parse string returned by MDTM command to timestamp as int."""
         return int(
-            datetime.datetime.strptime(mdtm_time[4:], "%Y%m%d%H%M%S")
+            datetime.datetime.strptime(mdtm_time, "%Y%m%d%H%M%S")
             .replace(tzinfo=datetime.timezone.utc)
             .timestamp()
         )
 
-    @staticmethod
-    def parse_permissions(permissions_str: str) -> int:
+    def __parse_permissions(self, file_mode: str) -> int:
         """
         parse permissions string to decimal value.
 
@@ -95,9 +122,9 @@ class FileInfo:
                         (filetype * 8^5) + (0 * 8^4) + (0 * 8^3) + (owner * 8^2) +
                         (group * 8^1) + (others * 8^0) = decimal value
         """
-        file_type = permissions_str[0].replace("d", "4").replace("-", "1")
+        file_type = file_mode[0].replace("d", "4").replace("-", "1")
         file_perm = (
-            permissions_str[1:10]
+            file_mode[1:10]
             .replace("-", "0")
             .replace("r", "4")
             .replace("w", "2")
@@ -110,4 +137,53 @@ class FileInfo:
             + (int(int(file_perm[0]) + int(file_perm[1]) + int(file_perm[2])) * 8**2)
             + (int(int(file_perm[3]) + int(file_perm[4]) + int(file_perm[5])) * 8**1)
             + (int(int(file_perm[6]) + int(file_perm[7]) + int(file_perm[8])) * 8**0)
+        )
+
+
+class File(FileInfo):
+    """A class to store file information and data stream."""
+
+    def __init__(
+        self,
+        file_name: str,
+        file_mtime: Union[float, str],
+        file_mode: Union[str, int],
+        file_stream: io.BytesIO,
+        file_size: Optional[int] = None,
+        file_uid: Optional[int] = None,
+        file_gid: Optional[int] = None,
+        file_atime: Optional[float] = None,
+    ):
+        super().__init__(
+            file_name=file_name,
+            file_mtime=file_mtime,
+            file_mode=file_mode,
+            file_size=file_size,
+            file_uid=file_uid,
+            file_gid=file_gid,
+            file_atime=file_atime,
+        )
+        self.file_stream = file_stream
+
+    @classmethod
+    def from_fileinfo(cls, file: FileInfo, file_stream: io.BytesIO) -> "File":
+        """
+        Creates a `File` object from a `FileInfo` object and a file stream.
+
+        Args:
+            file: `FileInfo` object
+            file_stream: file stream as `io.BytesIO`
+
+        Returns:
+            `File` object
+        """
+        return cls(
+            file_name=file.file_name,
+            file_mtime=file.file_mtime,
+            file_mode=file.file_mode,
+            file_size=file.file_size,
+            file_uid=file.file_uid,
+            file_gid=file.file_gid,
+            file_atime=file.file_atime,
+            file_stream=file_stream,
         )

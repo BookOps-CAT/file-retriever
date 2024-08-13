@@ -6,7 +6,7 @@ import logging.config
 import paramiko
 import pytest
 from file_retriever._clients import _ftpClient, _sftpClient, _BaseClient
-from file_retriever.file import FileInfo
+from file_retriever.file import FileInfo, File
 from file_retriever.utils import logger_config
 
 logger = logging.getLogger("file_retriever")
@@ -14,7 +14,7 @@ config = logger_config()
 logging.config.dictConfig(config)
 
 
-def test_BaseClient(mock_file_data):
+def test_BaseClient(mock_file_info):
     _BaseClient.__abstractmethods__ = set()
     ftp_bc = _BaseClient(username="foo", password="bar", host="baz", port=21)
     assert ftp_bc.__dict__ == {"connection": None}
@@ -24,7 +24,7 @@ def test_BaseClient(mock_file_data):
     assert ftp_bc.get_remote_file_data(file="foo.mrc", dir="bar") is None
     assert ftp_bc.get_remote_file_list(dir="foo") is None
     assert ftp_bc.is_active() is None
-    assert ftp_bc.write_file(file=mock_file_data, dir="bar", remote=True) is None
+    assert ftp_bc.write_file(file=mock_file_info, dir="bar", remote=True) is None
 
 
 class TestMock_ftpClient:
@@ -69,20 +69,20 @@ class TestMock_ftpClient:
         assert connection is None
 
     def test_ftpClient_fetch_file(
-        self, mock_ftpClient_sftpClient, mock_file_data, stub_creds
+        self, mock_ftpClient_sftpClient, mock_file_info, stub_creds
     ):
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
-        fh = ftp.fetch_file(file=mock_file_data, dir="bar")
+        fh = ftp.fetch_file(file=mock_file_info, dir="bar")
         assert fh.file_stream.getvalue()[0:1] == b"0"
 
     def test_ftpClient_fetch_file_permissions_error(
-        self, mock_file_data, mock_file_error, stub_creds
+        self, mock_file_info, mock_file_error, stub_creds
     ):
         stub_creds["port"] = "21"
         with pytest.raises(ftplib.error_perm):
             ftp = _ftpClient(**stub_creds)
-            ftp.fetch_file(file=mock_file_data, dir="bar")
+            ftp.fetch_file(file=mock_file_info, dir="bar")
 
     def test_ftpClient_get_remote_file_data(
         self, mock_ftpClient_sftpClient, stub_creds
@@ -90,15 +90,13 @@ class TestMock_ftpClient:
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
         file_data = ftp.get_remote_file_data(file="foo.mrc", dir="testdir")
-        assert file_data == FileInfo(
-            file_name="foo.mrc",
-            file_mtime=1704070800,
-            file_size=140401,
-            file_mode=33188,
-            file_uid=None,
-            file_gid=None,
-            file_atime=None,
-        )
+        assert file_data.file_name == "foo.mrc"
+        assert file_data.file_mtime == 1704070800
+        assert file_data.file_size == 140401
+        assert file_data.file_mode == 33188
+        assert file_data.file_uid is None
+        assert file_data.file_gid is None
+        assert file_data.file_atime is None
 
     def test_ftpClient_get_remote_file_data_error_perm(
         self, mock_file_error, stub_creds
@@ -114,17 +112,15 @@ class TestMock_ftpClient:
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
         files = ftp.get_remote_file_list(dir="testdir")
-        assert files == [
-            FileInfo(
-                file_name="foo.mrc",
-                file_mtime=1704070800,
-                file_size=140401,
-                file_mode=33188,
-                file_uid=None,
-                file_gid=None,
-                file_atime=None,
-            )
-        ]
+        assert all(isinstance(file, FileInfo) for file in files)
+        assert len(files) == 1
+        assert files[0].file_name == "foo.mrc"
+        assert files[0].file_mtime == 1704070800
+        assert files[0].file_size == 140401
+        assert files[0].file_mode == 33188
+        assert files[0].file_uid is None
+        assert files[0].file_gid is None
+        assert files[0].file_atime is None
 
     def test_ftpClient_get_remote_file_list_error_perm(
         self, mock_file_error, stub_creds
@@ -147,44 +143,46 @@ class TestMock_ftpClient:
         assert live_connection is False
 
     def test_ftpClient_write_file(
-        self, mock_ftpClient_sftpClient, mock_file_data, stub_creds
+        self, mock_ftpClient_sftpClient, mock_file_info, stub_creds
     ):
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
-        mock_file_data.file_stream = io.BytesIO(b"0")
-        remote_file = ftp.write_file(file=mock_file_data, dir="bar", remote=True)
-        local_file = ftp.write_file(file=mock_file_data, dir="bar", remote=False)
+        assert mock_file_info.file_name == "foo.mrc"
+        file_obj = File.from_fileinfo(file=mock_file_info, file_stream=io.BytesIO(b"0"))
+        assert file_obj.file_name == "foo.mrc"
+        remote_file = ftp.write_file(file=file_obj, dir="bar", remote=True)
+        local_file = ftp.write_file(file=file_obj, dir="bar", remote=False)
         assert remote_file.file_mtime == 1704070800
         assert remote_file.file_size == 140401
         assert local_file.file_mtime == 1704070800
         assert local_file.file_size == 140401
 
     def test_ftpClient_write_file_no_file_stream(
-        self, mock_file_error, mock_file_data, stub_creds
+        self, mock_file_error, mock_file_info, stub_creds
     ):
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
         with pytest.raises(AttributeError) as exc:
-            ftp.write_file(file=mock_file_data, dir="bar", remote=False)
-        assert "No file stream to write" in str(exc)
+            ftp.write_file(file=mock_file_info, dir="bar", remote=False)
+        assert "'FileInfo' object has no attribute 'file_stream'" in str(exc.value)
 
     def test_ftpClient_write_file_local_not_found(
-        self, mock_file_error, mock_file_data, stub_creds
+        self, mock_file_error, mock_file_info, stub_creds
     ):
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
-        mock_file_data.file_stream = io.BytesIO(b"0")
+        file = File.from_fileinfo(file=mock_file_info, file_stream=io.BytesIO(b"0"))
         with pytest.raises(OSError):
-            ftp.write_file(file=mock_file_data, dir="bar", remote=False)
+            ftp.write_file(file=file, dir="bar", remote=False)
 
     def test_ftpClient_write_file_remote_not_found(
-        self, mock_file_error, mock_file_data, stub_creds
+        self, mock_file_error, mock_file_info, stub_creds
     ):
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
-        mock_file_data.file_stream = io.BytesIO(b"0")
+        file = File.from_fileinfo(file=mock_file_info, file_stream=io.BytesIO(b"0"))
         with pytest.raises(ftplib.error_perm):
-            ftp.write_file(file=mock_file_data, dir="bar", remote=True)
+            ftp.write_file(file=file, dir="bar", remote=True)
 
 
 class TestMock_sftpClient:
@@ -236,36 +234,34 @@ class TestMock_sftpClient:
         assert connection is None
 
     def test_sftpClient_fetch_file(
-        self, mock_ftpClient_sftpClient, mock_file_data, stub_creds
+        self, mock_ftpClient_sftpClient, mock_file_info, stub_creds
     ):
         stub_creds["port"] = "22"
         sftp = _sftpClient(**stub_creds)
-        fh = sftp.fetch_file(file=mock_file_data, dir="bar")
+        fh = sftp.fetch_file(file=mock_file_info, dir="bar")
         assert fh.file_stream.getvalue()[0:1] == b"0"
 
     def test_sftpClient_fetch_file_not_found(
-        self, mock_file_data, mock_file_error, stub_creds
+        self, mock_file_info, mock_file_error, stub_creds
     ):
         stub_creds["port"] = "22"
         sftp = _sftpClient(**stub_creds)
         with pytest.raises(OSError):
-            sftp.fetch_file(file=mock_file_data, dir="bar")
+            sftp.fetch_file(file=mock_file_info, dir="bar")
 
     def test_sftpClient_get_remote_file_data(
         self, mock_ftpClient_sftpClient, stub_creds
     ):
         stub_creds["port"] = "22"
         ftp = _sftpClient(**stub_creds)
-        file = ftp.get_remote_file_data(file="foo.mrc", dir="testdir")
-        assert file == FileInfo(
-            file_name="foo.mrc",
-            file_mtime=1704070800,
-            file_size=140401,
-            file_uid=0,
-            file_gid=0,
-            file_atime=None,
-            file_mode=33188,
-        )
+        file_data = ftp.get_remote_file_data(file="foo.mrc", dir="testdir")
+        assert file_data.file_name == "foo.mrc"
+        assert file_data.file_mtime == 1704070800
+        assert file_data.file_size == 140401
+        assert file_data.file_mode == 33188
+        assert file_data.file_uid == 0
+        assert file_data.file_gid == 0
+        assert file_data.file_atime is None
 
     def test_sftpClient_get_remote_file_data_not_found(
         self, mock_file_error, stub_creds
@@ -281,17 +277,15 @@ class TestMock_sftpClient:
         stub_creds["port"] = "22"
         ftp = _sftpClient(**stub_creds)
         files = ftp.get_remote_file_list(dir="testdir")
-        assert files == [
-            FileInfo(
-                file_name="foo.mrc",
-                file_mtime=1704070800,
-                file_size=140401,
-                file_uid=0,
-                file_gid=0,
-                file_atime=None,
-                file_mode=33188,
-            )
-        ]
+        assert all(isinstance(file, FileInfo) for file in files)
+        assert len(files) == 1
+        assert files[0].file_name == "foo.mrc"
+        assert files[0].file_mtime == 1704070800
+        assert files[0].file_size == 140401
+        assert files[0].file_mode == 33188
+        assert files[0].file_uid == 0
+        assert files[0].file_gid == 0
+        assert files[0].file_atime is None
 
     def test_sftpClient_get_remote_file_list_not_found(
         self, mock_file_error, stub_creds
@@ -314,50 +308,50 @@ class TestMock_sftpClient:
         assert live_connection is False
 
     def test_sftpClient_write_file(
-        self, mock_ftpClient_sftpClient, mock_file_data, stub_creds
+        self, mock_ftpClient_sftpClient, mock_file_info, stub_creds
     ):
         stub_creds["port"] = "22"
         sftp = _sftpClient(**stub_creds)
-        mock_file_data.file_stream = io.BytesIO(b"0")
-        remote_file = sftp.write_file(file=mock_file_data, dir="bar", remote=True)
-        local_file = sftp.write_file(file=mock_file_data, dir="bar", remote=False)
+        file_obj = File.from_fileinfo(file=mock_file_info, file_stream=io.BytesIO(b"0"))
+        remote_file = sftp.write_file(file=file_obj, dir="bar", remote=True)
+        local_file = sftp.write_file(file=file_obj, dir="bar", remote=False)
         assert remote_file.file_mtime == 1704070800
         assert local_file.file_mtime == 1704070800
 
     def test_sftpClient_write_file_not_found_remote(
-        self, mock_file_error, mock_file_data, stub_creds, caplog
+        self, mock_file_error, mock_file_info, stub_creds, caplog
     ):
         stub_creds["port"] = "22"
         sftp = _sftpClient(**stub_creds)
-        mock_file_data.file_stream = io.BytesIO(b"0")
+        file_obj = File.from_fileinfo(file=mock_file_info, file_stream=io.BytesIO(b"0"))
         with pytest.raises(OSError):
-            sftp.write_file(file=mock_file_data, dir="bar", remote=True)
+            sftp.write_file(file=file_obj, dir="bar", remote=True)
         assert (
-            f"Unable to write {mock_file_data.file_name} to remote directory"
+            f"Unable to write {mock_file_info.file_name} to remote directory"
             in caplog.text
         )
 
     def test_sftpClient_write_file_not_found_local(
-        self, mock_file_error, mock_file_data, stub_creds, caplog
+        self, mock_file_error, mock_file_info, stub_creds, caplog
     ):
         stub_creds["port"] = "22"
         sftp = _sftpClient(**stub_creds)
-        mock_file_data.file_stream = io.BytesIO(b"0")
+        file_obj = File.from_fileinfo(file=mock_file_info, file_stream=io.BytesIO(b"0"))
         with pytest.raises(OSError):
-            sftp.write_file(file=mock_file_data, dir="bar", remote=False)
+            sftp.write_file(file=file_obj, dir="bar", remote=False)
         assert (
-            f"Unable to write {mock_file_data.file_name} to local directory"
+            f"Unable to write {mock_file_info.file_name} to local directory"
             in caplog.text
         )
 
     def test_sftpClient_write_file_no_file_stream(
-        self, mock_file_error, mock_file_data, stub_creds
+        self, mock_file_error, mock_file_info, stub_creds
     ):
         stub_creds["port"] = "22"
         sftp = _sftpClient(**stub_creds)
         with pytest.raises(AttributeError) as exc:
-            sftp.write_file(file=mock_file_data, dir="bar", remote=False)
-        assert "No file stream to write" in str(exc)
+            sftp.write_file(file=mock_file_info, dir="bar", remote=False)
+        assert "'FileInfo' object has no attribute 'file_stream'" in str(exc.value)
 
 
 @pytest.mark.livetest
@@ -382,14 +376,14 @@ class TestLiveClients:
         with pytest.raises(OSError) as exc:
             stub_creds["port"] = "21"
             _ftpClient(**stub_creds)
-        assert "getaddrinfo failed" in str(exc)
+        assert "getaddrinfo failed" in str(exc.value)
 
     def test_ftpClient_live_test_error_perm(self, live_ftp_creds):
         del live_ftp_creds["remote_dir"], live_ftp_creds["name"]
         with pytest.raises(ftplib.error_perm) as exc:
             live_ftp_creds["username"] = "bpl"
             _ftpClient(**live_ftp_creds)
-        assert "Login incorrect" in str(exc)
+        assert "Login incorrect" in str(exc.value)
 
     def test_sftpClient_live_test(self, live_sftp_creds):
         remote_dir = live_sftp_creds["remote_dir"]
@@ -414,7 +408,7 @@ class TestLiveClients:
         with pytest.raises(paramiko.AuthenticationException) as exc:
             live_sftp_creds["username"] = "bpl"
             _sftpClient(**live_sftp_creds)
-        assert "Authentication failed." in str(exc)
+        assert "Authentication failed." in str(exc.value)
 
     def test_sftpClient_NSDROP(self, NSDROP_creds):
         remote_dir = "NSDROP/file_retriever_test/test_vendor"

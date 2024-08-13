@@ -43,26 +43,47 @@ class MockFileData:
         self.st_uid = 0
         self.st_size = 140401
 
-    def create_SFTPAttributes(self):
+    def sftp_attr(self):
         sftp_attr = paramiko.SFTPAttributes()
-        sftp_attr.__dict__ = self.__dict__
         sftp_attr.filename = self.file_name
+        sftp_attr.st_mtime = self.st_mtime
+        sftp_attr.st_mode = self.st_mode
+        sftp_attr.st_atime = self.st_atime
+        sftp_attr.st_gid = self.st_gid
+        sftp_attr.st_uid = self.st_uid
+        sftp_attr.st_size = self.st_size
         return sftp_attr
+
+    def file_info(self):
+        return FileInfo(
+            self.file_name,
+            self.st_mtime,
+            self.st_size,
+            self.st_uid,
+            self.st_gid,
+            self.st_atime,
+            self.st_mode,
+        )
+
+    def os_stat_result(self):
+        result = os.stat_result()
+        result.st_mtime = self.st_mtime
+        result.st_mode = self.st_mode
+        result.st_atime = self.st_atime
+        result.st_gid = self.st_gid
+        result.st_uid = self.st_uid
+        result.st_size = self.st_size
+        return result
 
 
 @pytest.fixture
-def mock_file_data():
-    file = MockFileData()
-    return FileInfo(
-        file.file_name,
-        file.st_mtime,
-        file.st_size,
-        file.st_uid,
-        file.st_gid,
-        file.st_atime,
-        file.st_mode,
-        None,
-    )
+def mock_sftp_attr():
+    return MockFileData().sftp_attr()
+
+
+@pytest.fixture
+def mock_file_info():
+    return MockFileData().file_info()
 
 
 @pytest.fixture
@@ -130,16 +151,16 @@ class MockSFTPClient:
         return fl.write(b"00000")
 
     def listdir_attr(self, *args, **kwargs) -> List[paramiko.SFTPAttributes]:
-        return [MockFileData().create_SFTPAttributes()]
+        return [MockFileData().sftp_attr()]
 
     def put(self, *args, **kwargs) -> paramiko.SFTPAttributes:
-        return MockFileData().create_SFTPAttributes()
+        return MockFileData().sftp_attr()
 
     def putfo(self, *args, **kwargs) -> paramiko.SFTPAttributes:
-        return MockFileData().create_SFTPAttributes()
+        return MockFileData().sftp_attr()
 
     def stat(self, *args, **kwargs) -> paramiko.SFTPAttributes:
-        return MockFileData().create_SFTPAttributes()
+        return MockFileData().sftp_attr()
 
 
 class MockABCClient:

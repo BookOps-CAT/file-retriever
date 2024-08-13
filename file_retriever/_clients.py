@@ -12,7 +12,7 @@ import logging
 import os
 import paramiko
 from typing import List, Union, Optional
-from file_retriever.file import FileInfo
+from file_retriever.file import FileInfo, File
 
 logger = logging.getLogger("file_retriever")
 
@@ -47,7 +47,7 @@ class _BaseClient(ABC):
         pass
 
     @abstractmethod
-    def fetch_file(self, file: FileInfo, dir: str) -> FileInfo:
+    def fetch_file(self, file: FileInfo, dir: str) -> File:
         pass
 
     @abstractmethod
@@ -63,7 +63,7 @@ class _BaseClient(ABC):
         pass
 
     @abstractmethod
-    def write_file(self, file: FileInfo, dir: str, remote: bool) -> FileInfo:
+    def write_file(self, file: File, dir: str, remote: bool) -> FileInfo:
         pass
 
 
@@ -136,7 +136,7 @@ class _ftpClient(_BaseClient):
         """Closes connection to server."""
         self.connection.close()
 
-    def fetch_file(self, file: FileInfo, dir: str) -> FileInfo:
+    def fetch_file(self, file: FileInfo, dir: str) -> File:
         """ """
         try:
             self._check_dir(dir)
@@ -144,8 +144,8 @@ class _ftpClient(_BaseClient):
             logger.debug(f"Fetching {file.file_name} from {dir}")
             self.connection.retrbinary(f"RETR {file.file_name}", fh.write)
             logger.debug(f"File fetched from {dir}")
-            file.file_stream = fh
-            return file
+            fetched_file = File.from_fileinfo(file=file, file_stream=fh)
+            return fetched_file
         except ftplib.error_perm as e:
             logger.error(f"Unable to retrieve {file} from {dir}: {e}")
             raise
@@ -173,7 +173,7 @@ class _ftpClient(_BaseClient):
 
             def get_file_permissions(data):
                 nonlocal permissions
-                permissions = FileInfo.parse_permissions(permissions_str=data)
+                permissions = data[0:10]
 
             self.connection.retrlines(f"LIST {file}", get_file_permissions),
             if permissions is None:
@@ -182,9 +182,7 @@ class _ftpClient(_BaseClient):
             return FileInfo(
                 file_name=os.path.basename(file),
                 file_size=self.connection.size(file),
-                file_mtime=FileInfo.parse_mdtm_time(
-                    self.connection.voidcmd(f"MDTM {file}")
-                ),
+                file_mtime=self.connection.voidcmd(f"MDTM {file}")[4:],
                 file_mode=permissions,
             )
         except ftplib.error_perm as e:
@@ -232,16 +230,14 @@ class _ftpClient(_BaseClient):
         else:
             return False
 
-    def write_file(self, file: FileInfo, dir: str, remote: bool) -> FileInfo:
+    def write_file(self, file: File, dir: str, remote: bool) -> FileInfo:
         """ """
-        if file.file_stream is None:
-            raise AttributeError("No file stream to write")
         file.file_stream.seek(0)
-        if remote:
+        if remote is True:
             try:
                 self._check_dir(dir)
                 self.connection.storbinary(f"STOR {file.file_name}", file.file_stream)
-                return self.get_remote_file_data(file.file_name, dir)
+                return self.get_remote_file_data(file=file.file_name, dir=dir)
             except ftplib.error_perm as e:
                 logger.error(
                     f"Unable to write {file.file_name} to remote directory: {e}"
@@ -252,7 +248,9 @@ class _ftpClient(_BaseClient):
                 local_file = f"{dir}/{file.file_name}"
                 with open(local_file, "wb") as lf:
                     lf.write(file.file_stream.getbuffer())
-                    return FileInfo.from_stat_data(os.stat(local_file), file.file_name)
+                return FileInfo.from_stat_data(
+                    data=os.stat(local_file), file_name=file.file_name
+                )
             except OSError as e:
                 logger.error(
                     f"Unable to write {file.file_name} to local directory: {e}"
@@ -337,7 +335,7 @@ class _sftpClient(_BaseClient):
         """Closes connection to server."""
         self.connection.close()
 
-    def fetch_file(self, file: FileInfo, dir: str) -> FileInfo:
+    def fetch_file(self, file: FileInfo, dir: str) -> File:
         """
         Fetches `file` from `remote_dir` on server. File is loaded as `io.BytesIO`
         object to be written with `write_local_file` or `write_remote_file` method.
@@ -349,7 +347,7 @@ class _sftpClient(_BaseClient):
                 remote directory to fetch file from
 
         Returns:
-            io.BytesIO
+            fetched file as `File` object
 
         Raises:
             OSError: if unable to download file from server or if file is not found
@@ -359,8 +357,8 @@ class _sftpClient(_BaseClient):
             fh = io.BytesIO()
             logger.debug(f"Fetching {file.file_name} from {dir}")
             self.connection.getfo(remotepath=file.file_name, fl=fh)
-            file.file_stream = fh
-            return file
+            fetched_file = File.from_fileinfo(file=file, file_stream=fh)
+            return fetched_file
         except OSError as e:
             logger.error(f"Unable to retrieve {file.file_name} from {dir}: {e}")
             raise
@@ -425,7 +423,7 @@ class _sftpClient(_BaseClient):
         else:
             return True
 
-    def write_file(self, file: FileInfo, dir: str, remote: bool) -> FileInfo:
+    def write_file(self, file: File, dir: str, remote: bool) -> FileInfo:
         """
         Writes fetched file to directory. If `remote` is True, then file is written
         to server. If `remote` is False, then file is written to local directory.
@@ -444,8 +442,6 @@ class _sftpClient(_BaseClient):
         Raises:
             OSError: if unable to write file to directory
         """
-        if file.file_stream is None:
-            raise AttributeError("No file stream to write")
         file.file_stream.seek(0)
         if remote:
             try:
