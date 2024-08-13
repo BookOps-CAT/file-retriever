@@ -21,8 +21,8 @@ def test_BaseClient(mock_file_info):
     assert ftp_bc._check_dir(dir="foo") is None
     assert ftp_bc.close() is None
     assert ftp_bc.fetch_file(file="foo.mrc", dir="bar") is None
-    assert ftp_bc.get_remote_file_data(file="foo.mrc", dir="bar") is None
-    assert ftp_bc.get_remote_file_list(dir="foo") is None
+    assert ftp_bc.get_file_data(file_name="foo.mrc", dir="bar") is None
+    assert ftp_bc.list_file_data(dir="foo") is None
     assert ftp_bc.is_active() is None
     assert ftp_bc.write_file(file=mock_file_info, dir="bar", remote=True) is None
 
@@ -84,12 +84,10 @@ class TestMock_ftpClient:
             ftp = _ftpClient(**stub_creds)
             ftp.fetch_file(file=mock_file_info, dir="bar")
 
-    def test_ftpClient_get_remote_file_data(
-        self, mock_ftpClient_sftpClient, stub_creds
-    ):
+    def test_ftpClient_get_file_data(self, mock_ftpClient_sftpClient, stub_creds):
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
-        file_data = ftp.get_remote_file_data(file="foo.mrc", dir="testdir")
+        file_data = ftp.get_file_data(file_name="foo.mrc", dir="testdir")
         assert file_data.file_name == "foo.mrc"
         assert file_data.file_mtime == 1704070800
         assert file_data.file_size == 140401
@@ -98,20 +96,16 @@ class TestMock_ftpClient:
         assert file_data.file_gid is None
         assert file_data.file_atime is None
 
-    def test_ftpClient_get_remote_file_data_error_perm(
-        self, mock_file_error, stub_creds
-    ):
+    def test_ftpClient_get_file_data_error_perm(self, mock_file_error, stub_creds):
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
         with pytest.raises(ftplib.error_perm):
-            ftp.get_remote_file_data(file="foo.mrc", dir="testdir")
+            ftp.get_file_data(file_name="foo.mrc", dir="testdir")
 
-    def test_ftpClient_get_remote_file_list(
-        self, mock_ftpClient_sftpClient, stub_creds
-    ):
+    def test_ftpClient_list_file_data(self, mock_ftpClient_sftpClient, stub_creds):
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
-        files = ftp.get_remote_file_list(dir="testdir")
+        files = ftp.list_file_data(dir="testdir")
         assert all(isinstance(file, FileInfo) for file in files)
         assert len(files) == 1
         assert files[0].file_name == "foo.mrc"
@@ -122,13 +116,11 @@ class TestMock_ftpClient:
         assert files[0].file_gid is None
         assert files[0].file_atime is None
 
-    def test_ftpClient_get_remote_file_list_error_perm(
-        self, mock_file_error, stub_creds
-    ):
+    def test_ftpClient_list_file_data_error_perm(self, mock_file_error, stub_creds):
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
         with pytest.raises(ftplib.error_perm):
-            ftp.get_remote_file_list(dir="testdir")
+            ftp.list_file_data(dir="testdir")
 
     def test_ftpClient_is_active_true(self, mock_ftpClient_sftpClient, stub_creds):
         stub_creds["port"] = "21"
@@ -249,12 +241,10 @@ class TestMock_sftpClient:
         with pytest.raises(OSError):
             sftp.fetch_file(file=mock_file_info, dir="bar")
 
-    def test_sftpClient_get_remote_file_data(
-        self, mock_ftpClient_sftpClient, stub_creds
-    ):
+    def test_sftpClient_get_file_data(self, mock_ftpClient_sftpClient, stub_creds):
         stub_creds["port"] = "22"
         ftp = _sftpClient(**stub_creds)
-        file_data = ftp.get_remote_file_data(file="foo.mrc", dir="testdir")
+        file_data = ftp.get_file_data(file_name="foo.mrc", dir="testdir")
         assert file_data.file_name == "foo.mrc"
         assert file_data.file_mtime == 1704070800
         assert file_data.file_size == 140401
@@ -263,20 +253,16 @@ class TestMock_sftpClient:
         assert file_data.file_gid == 0
         assert file_data.file_atime is None
 
-    def test_sftpClient_get_remote_file_data_not_found(
-        self, mock_file_error, stub_creds
-    ):
+    def test_sftpClient_get_file_data_not_found(self, mock_file_error, stub_creds):
         stub_creds["port"] = "22"
         sftp = _sftpClient(**stub_creds)
         with pytest.raises(OSError):
-            sftp.get_remote_file_data(file="foo.mrc", dir="testdir")
+            sftp.get_file_data(file_name="foo.mrc", dir="testdir")
 
-    def test_sftpClient_get_remote_file_list(
-        self, mock_ftpClient_sftpClient, stub_creds
-    ):
+    def test_sftpClient_list_file_data(self, mock_ftpClient_sftpClient, stub_creds):
         stub_creds["port"] = "22"
         ftp = _sftpClient(**stub_creds)
-        files = ftp.get_remote_file_list(dir="testdir")
+        files = ftp.list_file_data(dir="testdir")
         assert all(isinstance(file, FileInfo) for file in files)
         assert len(files) == 1
         assert files[0].file_name == "foo.mrc"
@@ -287,13 +273,11 @@ class TestMock_sftpClient:
         assert files[0].file_gid == 0
         assert files[0].file_atime is None
 
-    def test_sftpClient_get_remote_file_list_not_found(
-        self, mock_file_error, stub_creds
-    ):
+    def test_sftpClient_list_file_data_not_found(self, mock_file_error, stub_creds):
         stub_creds["port"] = "22"
         sftp = _sftpClient(**stub_creds)
         with pytest.raises(OSError):
-            sftp.get_remote_file_list(dir="testdir")
+            sftp.list_file_data(dir="testdir")
 
     def test_sftpClient_is_active_true(self, mock_ftpClient_sftpClient, stub_creds):
         stub_creds["port"] = "22"
@@ -360,10 +344,10 @@ class TestLiveClients:
         remote_dir = live_ftp_creds["remote_dir"]
         del live_ftp_creds["remote_dir"], live_ftp_creds["name"]
         live_ftp = _ftpClient(**live_ftp_creds)
-        file_list = live_ftp.get_remote_file_list(dir=remote_dir)
+        file_list = live_ftp.list_file_data(dir=remote_dir)
         file_names = [file.file_name for file in file_list]
-        file_data = live_ftp.get_remote_file_data(
-            file="Sample_Full_RDA.mrc", dir=remote_dir
+        file_data = live_ftp.get_file_data(
+            file_name="Sample_Full_RDA.mrc", dir=remote_dir
         )
         fetched_file = live_ftp.fetch_file(file_data, remote_dir)
         assert "Sample_Full_RDA.mrc" in file_names
@@ -389,9 +373,9 @@ class TestLiveClients:
         remote_dir = live_sftp_creds["remote_dir"]
         del live_sftp_creds["remote_dir"], live_sftp_creds["name"]
         live_sftp = _sftpClient(**live_sftp_creds)
-        file_list = live_sftp.get_remote_file_list(dir=remote_dir)
-        file_data = live_sftp.get_remote_file_data(
-            file=file_list[0].file_name, dir=remote_dir
+        file_list = live_sftp.list_file_data(dir=remote_dir)
+        file_data = live_sftp.get_file_data(
+            file_name=file_list[0].file_name, dir=remote_dir
         )
         fetched_file = live_sftp.fetch_file(file=file_data, dir=remote_dir)
         assert live_sftp.connection.get_channel().active == 1
@@ -414,7 +398,7 @@ class TestLiveClients:
         remote_dir = "NSDROP/file_retriever_test/test_vendor"
         del NSDROP_creds["remote_dir"], NSDROP_creds["name"]
         live_sftp = _sftpClient(**NSDROP_creds)
-        get_file = live_sftp.get_remote_file_data(file="test.txt", dir=remote_dir)
+        get_file = live_sftp.get_file_data(file_name="test.txt", dir=remote_dir)
         fetched_file = live_sftp.fetch_file(file=get_file, dir=remote_dir)
         assert fetched_file.file_stream.getvalue() == b""
         assert get_file.file_name == "test.txt"

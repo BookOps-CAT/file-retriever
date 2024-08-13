@@ -51,11 +51,11 @@ class _BaseClient(ABC):
         pass
 
     @abstractmethod
-    def get_remote_file_data(self, file: str, dir: str) -> FileInfo:
+    def get_file_data(self, file_name: str, dir: str) -> FileInfo:
         pass
 
     @abstractmethod
-    def get_remote_file_list(self, dir: str) -> List[FileInfo]:
+    def list_file_data(self, dir: str) -> List[FileInfo]:
         pass
 
     @abstractmethod
@@ -126,6 +126,7 @@ class _ftpClient(_BaseClient):
             raise
 
     def _check_dir(self, dir: str) -> None:
+        """Changes directory to `dir` if not already in `dir`."""
         if self.connection.pwd().lstrip("/") != dir.lstrip("/"):
             logger.debug(f"Changing cwd to {dir}")
             self.connection.cwd(dir)
@@ -137,7 +138,22 @@ class _ftpClient(_BaseClient):
         self.connection.close()
 
     def fetch_file(self, file: FileInfo, dir: str) -> File:
-        """ """
+        """
+        Retrieves file from `dir` on server as `io.BytesIO` object. The
+        retrieved file is loaded as the file_stream attribute of a `File`
+        object.
+
+        Args:
+            file: `FileInfo` object representing file to fetch
+            dir: directory on server to fetch file from
+
+        Returns:
+            `File` object representing fetched file
+
+        Raises:
+            ftplib.error_perm: if unable to retrieve file from server
+
+        """
         try:
             self._check_dir(dir)
             fh = io.BytesIO()
@@ -150,16 +166,16 @@ class _ftpClient(_BaseClient):
             logger.error(f"Unable to retrieve {file} from {dir}: {e}")
             raise
 
-    def get_remote_file_data(self, file: str, dir: Optional[str] = None) -> FileInfo:
+    def get_file_data(self, file_name: str, dir: Optional[str] = None) -> FileInfo:
         """
         Retrieves metadata for single file on server.
 
         Args:
-            file: name of file to retrieve metadata for
-            remote_dir: directory on server to interact with
+            file_name: name of file to retrieve metadata for
+            dir: directory on server to interact with
 
         Returns:
-            `FileInfo` object representing file in `remote_dir`
+            `FileInfo` object representing metadata for file in `dir`
 
         Raises:
             ftplib.error_perm:
@@ -175,30 +191,30 @@ class _ftpClient(_BaseClient):
                 nonlocal permissions
                 permissions = data[0:10]
 
-            self.connection.retrlines(f"LIST {file}", get_file_permissions),
+            self.connection.retrlines(f"LIST {file_name}", get_file_permissions),
             if permissions is None:
-                logger.error(f"{file} not found on server.")
+                logger.error(f"{file_name} not found on server.")
                 raise ftplib.error_perm("File not found on server.")
             return FileInfo(
-                file_name=os.path.basename(file),
-                file_size=self.connection.size(file),
-                file_mtime=self.connection.voidcmd(f"MDTM {file}")[4:],
+                file_name=os.path.basename(file_name),
+                file_size=self.connection.size(file_name),
+                file_mtime=self.connection.voidcmd(f"MDTM {file_name}")[4:],
                 file_mode=permissions,
             )
         except ftplib.error_perm as e:
-            logger.error(f"Unable to retrieve file data for {file}: {e}")
+            logger.error(f"Unable to retrieve file data for {file_name}: {e}")
             raise
 
-    def get_remote_file_list(self, dir: str) -> List[FileInfo]:
+    def list_file_data(self, dir: str) -> List[FileInfo]:
         """
-        Retrieves metadata for each file in `remote_dir` on server.
+        Retrieves metadata for each file in `dir` on server.
 
         Args:
-            remote_dir: directory on server to interact with
+            dir: directory on server to interact with
 
         Returns:
-            list of `FileInfo` objects representing files in `remote_dir`
-            returns an empty list if `remote_dir` is empty or does not exist
+            list of `FileInfo` objects representing files in `dir`
+            returns an empty list if `dir` is empty or does not exist
 
         Raises:
             ftplib.error_perm:
@@ -209,7 +225,7 @@ class _ftpClient(_BaseClient):
         try:
             file_data_list = self.connection.nlst(dir)
             for data in file_data_list:
-                file = self.get_remote_file_data(data)
+                file = self.get_file_data(file_name=data)
                 files.append(file)
         except ftplib.error_perm as e:
             logger.error(f"Unable to retrieve file data for {dir}: {e}")
@@ -231,13 +247,33 @@ class _ftpClient(_BaseClient):
             return False
 
     def write_file(self, file: File, dir: str, remote: bool) -> FileInfo:
-        """ """
+        """
+        Writes fetched file to directory. If `remote` is True, then file is written
+        to server. If `remote` is False, then file is written to local directory.
+        Returns `FileInfo` object representing metadata for written file.
+
+        Args:
+            file:
+                `File` object representing file to write
+            dir:
+                directory to write file to
+            remote:
+                bool indicating if file should be written to remote or local
+                directory
+
+        Returns:
+            `FileInfo` object representing written file
+
+        Raises:
+            ftplib.error_perm: if unable to write file to remote directory
+            OSError: if unable to write file to local directory
+        """
         file.file_stream.seek(0)
         if remote is True:
             try:
                 self._check_dir(dir)
                 self.connection.storbinary(f"STOR {file.file_name}", file.file_stream)
-                return self.get_remote_file_data(file=file.file_name, dir=dir)
+                return self.get_file_data(file_name=file.file_name, dir=dir)
             except ftplib.error_perm as e:
                 logger.error(
                     f"Unable to write {file.file_name} to remote directory: {e}"
@@ -337,20 +373,20 @@ class _sftpClient(_BaseClient):
 
     def fetch_file(self, file: FileInfo, dir: str) -> File:
         """
-        Fetches `file` from `remote_dir` on server. File is loaded as `io.BytesIO`
-        object to be written with `write_local_file` or `write_remote_file` method.
+        Retrieves file from `dir` on server as `io.BytesIO` object. The
+        retrieved file is loaded as the file_stream attribute of a `File`
+        object.
 
         Args:
-            file:
-                name of file to fetch
-            remote_dir:
-                remote directory to fetch file from
+            file: `FileInfo` object representing file to fetch
+            dir: directory on server to fetch file from
 
         Returns:
-            fetched file as `File` object
+            `File` object representing fetched file
 
         Raises:
-            OSError: if unable to download file from server or if file is not found
+            OSError: if unable to retrieve file from server or if file not found
+
         """
         try:
             self._check_dir(dir)
@@ -363,44 +399,42 @@ class _sftpClient(_BaseClient):
             logger.error(f"Unable to retrieve {file.file_name} from {dir}: {e}")
             raise
 
-    def get_remote_file_data(self, file: str, dir: str) -> FileInfo:
+    def get_file_data(self, file_name: str, dir: str) -> FileInfo:
         """
         Retrieves metadata for single file on server.
 
         Args:
-            file: name of file to retrieve metadata for
-            remote_dir: directory on server to interact with
+            file_name: name of file to retrieve metadata for
+            dir: directory on server to interact with
 
         Returns:
-            `FileInfo` object representing file in `remote_dir`
+            `FileInfo` object representing file in `dir`
 
         Raises:
-            OSError:
-                if `file` or `remote_dir` does not exist or if server response
-                code is not in range 200-299
+            OSError: if file or `dir` does not exist
         """
         try:
             self._check_dir(dir)
-            logger.debug(f"Retrieving file data for {file}")
+            logger.debug(f"Retrieving file data for {file_name}")
             return FileInfo.from_stat_data(
-                data=self.connection.stat(file), file_name=file
+                data=self.connection.stat(file_name), file_name=file_name
             )
         except OSError as e:
-            logger.error(f"Unable to retrieve file data for {file}: {e}")
+            logger.error(f"Unable to retrieve file data for {file_name}: {e}")
             raise
 
-    def get_remote_file_list(self, dir: str) -> List[FileInfo]:
+    def list_file_data(self, dir: str) -> List[FileInfo]:
         """
-        Lists metadata for each file in `remote_dir` on server.
+        Lists metadata for each file in `dir` on server.
 
         Args:
-            remote_dir: directory on server to interact with
+            dir: directory on server to interact with
 
         Returns:
-            list of `FileInfo` objects representing files in `remote_dir`
+            list of `FileInfo` objects representing files in `dir`
 
         Raises:
-            OSError: if `remote_dir` does not exist
+            OSError: if `dir` does not exist
         """
         try:
             file_metadata = self.connection.listdir_attr(dir)
@@ -427,14 +461,16 @@ class _sftpClient(_BaseClient):
         """
         Writes fetched file to directory. If `remote` is True, then file is written
         to server. If `remote` is False, then file is written to local directory.
+        Returns `FileInfo` object representing metadata for written file.
 
         Args:
             file:
-                name of file to write
+                `File` object representing file to write
             dir:
                 directory to write file to
             remote:
-                bool indicating if file should be written to remote or local directory
+                bool indicating if file should be written to remote or local
+                directory
 
         Returns:
             `FileInfo` object representing written file

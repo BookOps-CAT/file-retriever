@@ -111,7 +111,7 @@ class TestMockClient:
             stub_creds["name"],
         ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
-        file_exists = connect.file_exists(file="foo.mrc", dir="bar", remote=False)
+        file_exists = connect.file_exists(file_name="foo.mrc", dir="bar", remote=False)
         assert file_exists is True
 
     @pytest.mark.parametrize(
@@ -127,7 +127,7 @@ class TestMockClient:
             stub_creds["name"],
         ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
-        file_exists = connect.file_exists(file="foo.mrc", dir="bar", remote=True)
+        file_exists = connect.file_exists(file_name="foo.mrc", dir="bar", remote=True)
         assert file_exists is True
 
     def test_Client_file_exists_sftp_file_not_found(self, mock_file_error, stub_creds):
@@ -137,7 +137,7 @@ class TestMockClient:
             stub_creds["name"],
         ) = (22, "testdir", "test")
         connect = Client(**stub_creds)
-        file_exists = connect.file_exists(file="foo.mrc", dir="bar", remote=True)
+        file_exists = connect.file_exists(file_name="foo.mrc", dir="bar", remote=True)
         assert file_exists is False
 
     @pytest.mark.parametrize(
@@ -206,7 +206,7 @@ class TestMockClient:
             stub_creds["name"],
         ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
-        file = connect.get_file_info(file="foo.mrc", remote_dir=dir)
+        file = connect.get_file_info(file_name="foo.mrc", remote_dir=dir)
         assert isinstance(file, FileInfo)
         assert file.file_name == "foo.mrc"
         assert file.file_mtime == 1704070800
@@ -224,7 +224,7 @@ class TestMockClient:
         ) = (21, "testdir", "test")
         connect = Client(**stub_creds)
         with pytest.raises(ftplib.error_perm):
-            connect.get_file_info(file="foo.mrc", remote_dir="testdir")
+            connect.get_file_info(file_name="foo.mrc", remote_dir="testdir")
 
     def test_Client_sftp_get_file_info_not_found(self, mock_file_error, stub_creds):
         (
@@ -234,7 +234,7 @@ class TestMockClient:
         ) = (22, "testdir", "test")
         connect = Client(**stub_creds)
         with pytest.raises(OSError):
-            connect.get_file_info(file="foo.mrc", remote_dir="testdir")
+            connect.get_file_info(file_name="foo.mrc", remote_dir="testdir")
 
     @pytest.mark.parametrize("port, uid_gid", [(21, None), (22, 0)])
     def test_Client_list_file_info(self, mock_Client, stub_creds, port, uid_gid):

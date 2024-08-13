@@ -8,7 +8,7 @@ import logging
 import os
 from typing import List, Optional, Union
 from file_retriever._clients import _ftpClient, _sftpClient
-from file_retriever.file import FileInfo
+from file_retriever.file import FileInfo, File
 
 logger = logging.getLogger("file_retriever")
 
@@ -90,13 +90,14 @@ class Client:
         """Checks if connection to server is active."""
         return self.session.is_active()
 
-    def file_exists(self, file: str, dir: str, remote: bool) -> bool:
+    def file_exists(self, file_name: str, dir: str, remote: bool) -> bool:
         """
-        Check if `file` exists in `dir`. If `remote` is True then check will
-        be performed on server, otherwise check will be performed locally.
+        Check if file with the name `file_name` exists in `dir`. If `remote`
+        is True then check will be performed on server, otherwise check will
+        be performed locally.
 
         Args:
-            file: name of file to check
+            file_name: name of file to check
             dir: directory to check for file
             remote: whether to check file on server (True) or locally (False)
 
@@ -105,26 +106,29 @@ class Client:
         """
         if remote:
             try:
-                remote_file = self.session.get_remote_file_data(file, dir)
-                return remote_file.file_name == file
+                remote_file = self.session.get_file_data(file_name=file_name, dir=dir)
+                return remote_file.file_name == file_name
             except OSError:
                 return False
         else:
-            return os.path.exists(os.path.join(dir, file))
+            return os.path.exists(f"{dir}/{file_name}")
 
     def get_file(
         self, files: Union[FileInfo, List[FileInfo]], remote_dir: Optional[str] = None
-    ) -> Union[FileInfo, List[FileInfo]]:
+    ) -> Union[File, List[File]]:
         """
-        Fetches `file` from `remote_dir` on server as bytes. If `remote_dir` is not
-        provided then file will be fetched from `self.remote_dir`.
+        Fetches one or more files from `remote_dir` on server. If `remote_dir` is
+        not provided then file will be fetched from `self.remote_dir`.
 
         Args:
-            file: name of file to fetch
-            remote_dir: directory on server to fetch file from
+            files:
+                single file as `FileInfo` object or multipel files as list of
+                `FileInfo` objects
+            remote_dir:
+                directory on server to fetch file from
 
         Returns:
-            file fetched from `remote_dir` as bytes
+            file(s) fetched from `remote_dir` as `File` object(s)
         """
         if not remote_dir or remote_dir is None:
             logger.debug(f"Param `remote_dir` not passed. Using {self.remote_dir}.")
@@ -137,22 +141,24 @@ class Client:
         else:
             return self.session.fetch_file(file=files, dir=remote_dir)
 
-    def get_file_info(self, file: str, remote_dir: Optional[str] = None) -> FileInfo:
+    def get_file_info(
+        self, file_name: str, remote_dir: Optional[str] = None
+    ) -> FileInfo:
         """
         Retrieve metadata for `file` in `remote_dir` on server. If `remote_dir` is not
         provided then data for `file` in `self.remote_dir` will be retrieved.
 
         Args:
-            file: name of file to retrieve metadata for
+            file_name: name of file to retrieve metadata for
             remote_dir: directory on server to interact with
 
         Returns:
-            file in `remote_dir` represented as `File` object
+            file in `remote_dir` represented as `FileInfo` object
         """
         if not remote_dir or remote_dir is None:
             logger.debug(f"Param `remote_dir` not passed. Using {self.remote_dir}.")
             remote_dir = self.remote_dir
-        return self.session.get_remote_file_data(file=file, dir=remote_dir)
+        return self.session.get_file_data(file_name=file_name, dir=remote_dir)
 
     def list_file_info(
         self, time_delta: int = 0, remote_dir: Optional[str] = None
@@ -168,14 +174,14 @@ class Client:
             remote_dir: directory on server to interact with
 
         Returns:
-            list of files in `remote_dir` represented as `File` objects
+            list of files in `remote_dir` represented as `FileInfo` objects
         """
         today = datetime.datetime.now()
 
         if not remote_dir or remote_dir is None:
             logger.debug(f"Param `remote_dir` not passed. Using {self.remote_dir}.")
             remote_dir = self.remote_dir
-        files = self.session.get_remote_file_list(dir=remote_dir)
+        files = self.session.list_file_data(dir=remote_dir)
         if time_delta > 0:
             logger.debug(f"Checking for files modified in last {time_delta} days.")
             return [
@@ -191,29 +197,32 @@ class Client:
 
     def put_file(
         self,
-        files: Union[FileInfo, List[FileInfo]],
+        files: Union[File, List[File]],
         dir: str,
         remote: bool,
         check: bool,
     ) -> Optional[Union[FileInfo, List[FileInfo]]]:
         """
-        Writes fetched file to directory. If `remote` is True, then file is written
-        to directory `dir` the Client server. If `remote` is False, then file is written
-        to the local directory `dir`. If `check` is then `dir` will be checked for a
-        file with the same name as `file` it is written to the directory.
+        Writes fetched file(s) to directory. Takes one or more `File` objects and
+        writes them to `dir` directory. If `remote` is True, then file is written
+        to `dir` on the Client server. If `remote` is False, then file is written
+        to the local directory `dir`. If `check` True is then `dir` will be checked
+        for an existing file with the same name for before writing the file. If an
+        existing file is found then the file will not be written.
 
         Args:
             files:
-                name of file to write
+                one or more files as `File` objects
             dir:
-                directory to write file to
+                directory to write file(s) to
             remote:
-                bool indicating if file should be written to remote or local directory
+                bool indicating if file(s) should be written to remote or local
+                directory
             check:
-                bool indicating if directory should be checked before writing file
+                bool indicating if directory should be checked before writing file(s)
 
         Returns:
-            `File` object representing written file
+            one or more `FileInfo` objects representing written file(s)
 
         Raises:
             ftplib.error_perm: if unable to write file to directory
@@ -223,7 +232,7 @@ class Client:
             get_files = []
             for file in files:
                 if check and self.file_exists(
-                    file=file.file_name, dir=dir, remote=remote
+                    file_name=file.file_name, dir=dir, remote=remote
                 ):
                     logger.error(
                         f"{file.file_name} already exists in {dir}. "
@@ -240,7 +249,9 @@ class Client:
                 )
             return written_files
         elif isinstance(files, FileInfo):
-            if check and self.file_exists(file=files.file_name, dir=dir, remote=remote):
+            if check and self.file_exists(
+                file_name=files.file_name, dir=dir, remote=remote
+            ):
                 logger.error(
                     f"{files.file_name} already exists in {dir}. "
                     f"Skipping {files.file_name}."
