@@ -5,11 +5,10 @@ ftp or sftp client.
 
 import datetime
 import logging
-import io
 import os
 from typing import List, Optional, Union
 from file_retriever._clients import _ftpClient, _sftpClient
-from file_retriever.file import File
+from file_retriever.file import FileInfo
 
 logger = logging.getLogger("file_retriever")
 
@@ -113,10 +112,9 @@ class Client:
         else:
             return os.path.exists(os.path.join(dir, file))
 
-    # def get_file(self, file: str, remote_dir: Optional[str] = None) -> io.BytesIO:
     def get_file(
-        self, file: Union[File, List[File]], remote_dir: Optional[str] = None
-    ) -> Union[File, List[File]]:
+        self, files: Union[FileInfo, List[FileInfo]], remote_dir: Optional[str] = None
+    ) -> Union[FileInfo, List[FileInfo]]:
         """
         Fetches `file` from `remote_dir` on server as bytes. If `remote_dir` is not
         provided then file will be fetched from `self.remote_dir`.
@@ -131,9 +129,15 @@ class Client:
         if not remote_dir or remote_dir is None:
             logger.debug(f"Param `remote_dir` not passed. Using {self.remote_dir}.")
             remote_dir = self.remote_dir
-        return self.session.fetch_file(file, remote_dir)
+        if isinstance(files, list):
+            file_list = []
+            for file in files:
+                file_list.append(self.session.fetch_file(file=file, dir=remote_dir))
+            return file_list
+        else:
+            return self.session.fetch_file(file=files, dir=remote_dir)
 
-    def get_file_info(self, file: str, remote_dir: Optional[str] = None) -> File:
+    def get_file_info(self, file: str, remote_dir: Optional[str] = None) -> FileInfo:
         """
         Retrieve metadata for `file` in `remote_dir` on server. If `remote_dir` is not
         provided then data for `file` in `self.remote_dir` will be retrieved.
@@ -148,11 +152,11 @@ class Client:
         if not remote_dir or remote_dir is None:
             logger.debug(f"Param `remote_dir` not passed. Using {self.remote_dir}.")
             remote_dir = self.remote_dir
-        return self.session.get_remote_file_data(file, remote_dir)
+        return self.session.get_remote_file_data(file=file, dir=remote_dir)
 
-    def list_remote_dir(
+    def list_file_info(
         self, time_delta: int = 0, remote_dir: Optional[str] = None
-    ) -> List[File]:
+    ) -> List[FileInfo]:
         """
         Lists each file in `remote_dir` directory on server. If `remote_dir` is not
         provided then files in `self.remote_dir` will be listed. If `time_delta`
@@ -171,7 +175,7 @@ class Client:
         if not remote_dir or remote_dir is None:
             logger.debug(f"Param `remote_dir` not passed. Using {self.remote_dir}.")
             remote_dir = self.remote_dir
-        files = self.session.get_remote_file_list(remote_dir)
+        files = self.session.get_remote_file_list(dir=remote_dir)
         if time_delta > 0:
             logger.debug(f"Checking for files modified in last {time_delta} days.")
             return [
@@ -186,8 +190,12 @@ class Client:
             return files
 
     def put_file(
-        self, file: Union[File, List[File]], dir: str, remote: bool, check: bool
-    ) -> Union[File, List[File]]:
+        self,
+        files: Union[FileInfo, List[FileInfo]],
+        dir: str,
+        remote: bool,
+        check: bool,
+    ) -> Optional[Union[FileInfo, List[FileInfo]]]:
         """
         Writes fetched file to directory. If `remote` is True, then file is written
         to directory `dir` the Client server. If `remote` is False, then file is written
@@ -195,9 +203,7 @@ class Client:
         file with the same name as `file` it is written to the directory.
 
         Args:
-            fh:
-                `io.BytesIO` object representing file to write
-            file:
+            files:
                 name of file to write
             dir:
                 directory to write file to
@@ -213,11 +219,33 @@ class Client:
             ftplib.error_perm: if unable to write file to directory
             OSError: if unable to write file to directory
         """
-        # if check and self.file_exists(file.file_name, dir=dir, remote=True):
-        #     if isinstance(file, list):
-        #         logger.error(f"{file} not written to {dir} because it already exists")
-        #         raise FileExistsError
-        #     logger.error(f"{file} not written to {dir} because it already exists")
-        #     raise FileExistsError
-        logger.debug(f"Writing {file} to {dir} directory")
-        return self.session.write_file(file, dir, remote)
+        if isinstance(files, list):
+            get_files = []
+            for file in files:
+                if check and self.file_exists(
+                    file=file.file_name, dir=dir, remote=remote
+                ):
+                    logger.error(
+                        f"{file.file_name} already exists in {dir}. "
+                        f"Skipping {file.file_name}."
+                    )
+                    continue
+                else:
+                    get_files.append(file)
+            written_files = []
+            for file in get_files:
+                logger.debug(f"Writing {file.file_name} to {dir} directory")
+                written_files.append(
+                    self.session.write_file(file=file, dir=dir, remote=remote)
+                )
+            return written_files
+        elif isinstance(files, FileInfo):
+            if check and self.file_exists(file=files.file_name, dir=dir, remote=remote):
+                logger.error(
+                    f"{files.file_name} already exists in {dir}. "
+                    f"Skipping {files.file_name}."
+                )
+                return None
+            else:
+                logger.debug(f"Writing {files.file_name} to {dir} directory")
+                return self.session.write_file(file=files, dir=dir, remote=remote)

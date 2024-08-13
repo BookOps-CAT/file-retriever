@@ -1,30 +1,30 @@
 import os
 import paramiko
 import pytest
-from file_retriever.file import File
+from file_retriever.file import FileInfo
 
 
-def test_File():
-    file = File(file_name="foo.mrc", file_mtime=1704070800)
+def test_FileInfo():
+    file = FileInfo(file_name="foo.mrc", file_mtime=1704070800)
     assert file.file_name == "foo.mrc"
     assert file.file_mtime == 1704070800
     assert isinstance(file.file_name, str)
     assert isinstance(file.file_mtime, int)
-    assert isinstance(file, File)
+    assert isinstance(file, FileInfo)
 
 
 def test_File_from_stat_data(mock_ftpClient_sftpClient):
     foo_attr = paramiko.SFTPAttributes.from_stat(
         obj=os.stat("foo.mrc"), filename="foo.mrc"
     )
-    foo = File.from_stat_data(data=foo_attr)
+    foo = FileInfo.from_stat_data(data=foo_attr)
     bar_attr = paramiko.SFTPAttributes.from_stat(obj=os.stat("bar.mrc"))
-    bar = File.from_stat_data(data=bar_attr, file_name="bar.mrc")
+    bar = FileInfo.from_stat_data(data=bar_attr, file_name="bar.mrc")
     baz_attr = paramiko.SFTPAttributes.from_stat(obj=os.stat("baz.mrc"))
     baz_attr.longname = (
         "-rw-r--r--    1 0        0          140401 Jan  1 00:01 baz.mrc"
     )
-    baz = File.from_stat_data(data=baz_attr)
+    baz = FileInfo.from_stat_data(data=baz_attr)
     assert isinstance(foo_attr, paramiko.SFTPAttributes)
     assert foo.file_name == "foo.mrc"
     assert foo.file_mtime == 1704070800
@@ -39,7 +39,7 @@ def test_File_from_stat_data(mock_ftpClient_sftpClient):
 def test_File_from_stat_data_no_filename(mock_ftpClient_sftpClient):
     sftp_attr = paramiko.SFTPAttributes.from_stat(obj=os.stat("foo.mrc"))
     with pytest.raises(AttributeError) as exc:
-        File.from_stat_data(data=sftp_attr)
+        FileInfo.from_stat_data(data=sftp_attr)
     assert "No filename provided" in str(exc)
 
 
@@ -49,7 +49,7 @@ def test_File_from_stat_data_no_st_mtime(mock_ftpClient_sftpClient):
     )
     delattr(sftp_attr, "st_mtime")
     with pytest.raises(AttributeError) as exc:
-        File.from_stat_data(data=sftp_attr)
+        FileInfo.from_stat_data(data=sftp_attr)
     assert "No file modification time provided" in str(exc)
 
 
@@ -59,7 +59,7 @@ def test_File_from_stat_data_None_st_mtime(mock_ftpClient_sftpClient):
     )
     sftp_attr.st_mtime = None
     with pytest.raises(AttributeError) as exc:
-        File.from_stat_data(data=sftp_attr)
+        FileInfo.from_stat_data(data=sftp_attr)
     assert "No file modification time provided" in str(exc)
 
 
@@ -81,7 +81,7 @@ def test_File_from_stat_data_None_st_mtime(mock_ftpClient_sftpClient):
     ],
 )
 def test_File_parse_mdtm_time(str_time, mtime):
-    parsed = File.parse_mdtm_time(str_time)
+    parsed = FileInfo.parse_mdtm_time(str_time)
     assert parsed == mtime
 
 
@@ -100,8 +100,9 @@ def test_File_parse_mdtm_time(str_time, mtime):
             "-rxwrxwrxw",
             33279,
         ),
+        ("-r--------", 33024),
     ],
 )
 def test_File_parse_permissions(str_permissions, decimal_permissions):
-    parsed = File.parse_permissions(str_permissions)
+    parsed = FileInfo.parse_permissions(str_permissions)
     assert parsed == decimal_permissions

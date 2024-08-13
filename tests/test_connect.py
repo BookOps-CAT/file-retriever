@@ -6,7 +6,7 @@ import logging.config
 import pytest
 from file_retriever.connect import Client
 from file_retriever._clients import _ftpClient, _sftpClient
-from file_retriever.file import File
+from file_retriever.file import FileInfo
 from file_retriever.utils import logger_config
 
 logger = logging.getLogger("file_retriever")
@@ -141,6 +141,57 @@ class TestMockClient:
         assert file_exists is False
 
     @pytest.mark.parametrize(
+        "port, dir",
+        [(21, "testdir"), (21, None), (22, "testdir"), (22, None)],
+    )
+    def test_Client_get_file(self, mock_Client, mock_file_data, stub_creds, port, dir):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["name"],
+        ) = (port, "testdir", "test")
+        connect = Client(**stub_creds)
+        mock_file_data.file_stream = io.BytesIO(b"0")
+        single_file = mock_file_data
+        single_file.file_stream = io.BytesIO(b"0")
+        multiple_files = [mock_file_data for i in range(3)]
+        (
+            multiple_files[0].file_stream,
+            multiple_files[1].file_stream,
+            multiple_files[2].file_stream,
+        ) = (io.BytesIO(b"0"), io.BytesIO(b"1"), io.BytesIO(b"2"))
+        file = connect.get_file(mock_file_data, remote_dir=dir)
+        files = connect.get_file(multiple_files, remote_dir=dir)
+        assert isinstance(file, FileInfo)
+        assert len(files) == 3
+        assert all(isinstance(f, FileInfo) for f in files)
+
+    def test_Client_ftp_get_file_error_perm(
+        self, mock_file_error, mock_file_data, stub_creds
+    ):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["name"],
+        ) = (21, "testdir", "test")
+        connect = Client(**stub_creds)
+        with pytest.raises(ftplib.error_perm):
+            connect.get_file(mock_file_data, remote_dir="bar_dir")
+
+    def test_Client_sftp_get_file_not_found(
+        self, mock_file_error, mock_file_data, stub_creds
+    ):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["name"],
+        ) = (22, "testdir", "test")
+        connect = Client(**stub_creds)
+        mock_file_data.file_stream = io.BytesIO(b"0")
+        with pytest.raises(OSError):
+            connect.get_file(mock_file_data, remote_dir="bar_dir")
+
+    @pytest.mark.parametrize(
         "port, dir, uid_gid",
         [(21, "testdir", None), (21, None, None), (22, "testdir", 0), (22, None, 0)],
     )
@@ -152,7 +203,7 @@ class TestMockClient:
         ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
         file = connect.get_file_info(file="foo.mrc", remote_dir=dir)
-        assert file == File(
+        assert file == FileInfo(
             file_name="foo.mrc",
             file_mtime=1704070800,
             file_size=140401,
@@ -183,17 +234,17 @@ class TestMockClient:
             connect.get_file_info("foo.mrc", "testdir")
 
     @pytest.mark.parametrize("port, uid_gid", [(21, None), (22, 0)])
-    def test_Client_list_remote_dir(self, mock_Client, stub_creds, port, uid_gid):
+    def test_Client_list_file_info(self, mock_Client, stub_creds, port, uid_gid):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
             stub_creds["name"],
         ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
-        all_files = connect.list_remote_dir()
-        recent_files = connect.list_remote_dir(time_delta=5, remote_dir="testdir")
+        all_files = connect.list_file_info()
+        recent_files = connect.list_file_info(time_delta=5, remote_dir="testdir")
         assert all_files == [
-            File(
+            FileInfo(
                 file_name="foo.mrc",
                 file_mtime=1704070800,
                 file_size=140401,
@@ -215,7 +266,7 @@ class TestMockClient:
         ) = (21, "testdir", "test")
         connect = Client(**stub_creds)
         with pytest.raises(ftplib.error_reply):
-            connect.list_remote_dir()
+            connect.list_file_info()
 
     def test_Client_list_sftp_file_not_found(self, mock_file_error, stub_creds):
         (
@@ -225,82 +276,72 @@ class TestMockClient:
         ) = (22, "testdir", "test")
         connect = Client(**stub_creds)
         with pytest.raises(OSError):
-            connect.list_remote_dir()
+            connect.list_file_info()
 
     @pytest.mark.parametrize(
-        "port, dir",
-        [(21, "testdir"), (21, None), (22, "testdir"), (22, None)],
+        "port, check",
+        [(21, True), (21, False), (22, True), (22, False)],
     )
-    def test_Client_get_file(self, mock_Client, mock_file_data, stub_creds, port, dir):
+    def test_Client_put_file(
+        self, mock_Client, mock_file_data, stub_creds, port, check
+    ):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
             stub_creds["name"],
         ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
-        downloaded_file = connect.get_file(mock_file_data, remote_dir=dir)
-        assert isinstance(downloaded_file, File)
+        file = mock_file_data
+        file.file_stream = io.BytesIO(b"0")
+        local_file = connect.put_file(files=file, dir="bar", remote=False, check=check)
+        remote_file = connect.put_file(files=file, dir="bar", remote=True, check=check)
+        assert remote_file.file_mtime == 1704070800
+        assert local_file.file_mtime == 1704070800
 
-    def test_Client_ftp_get_file_permissions_error(self, mock_file_error, stub_creds):
+    @pytest.mark.parametrize(
+        "port, check",
+        [(21, True), (21, False), (22, True), (22, False)],
+    )
+    def test_Client_put_files(
+        self, mock_Client, mock_file_data, stub_creds, port, check
+    ):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
             stub_creds["name"],
-        ) = (21, "testdir", "test")
+        ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
-        with pytest.raises(ftplib.error_perm):
-            connect.get_file("foo.mrc", remote_dir="bar_dir")
+        files = [mock_file_data for i in range(3)]
+        (
+            files[0].file_stream,
+            files[1].file_stream,
+            files[2].file_stream,
+        ) = (io.BytesIO(b"0"), io.BytesIO(b"1"), io.BytesIO(b"2"))
+        local_files = connect.put_file(
+            files=files, dir="bar", remote=False, check=check
+        )
+        remote_files = connect.put_file(
+            files=files, dir="bar", remote=True, check=check
+        )
+        assert len(local_files) == 3
+        assert len(remote_files) == 3
+        assert all(isinstance(f, FileInfo) for f in files)
 
-    def test_Client_sftp_get_file_not_found(
+    def test_Client_ftp_put_file_error_perm(
         self, mock_file_error, mock_file_data, stub_creds
     ):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
             stub_creds["name"],
-        ) = (22, "testdir", "test")
-        connect = Client(**stub_creds)
-        with pytest.raises(OSError):
-            connect.get_file(mock_file_data, remote_dir="bar_dir")
-
-    @pytest.mark.parametrize(
-        "port, check",
-        [(21, True), (21, False), (22, True), (22, False)],
-    )
-    def test_Client_put_file(self, mock_Client, stub_creds, port, check):
-        (
-            stub_creds["port"],
-            stub_creds["remote_dir"],
-            stub_creds["name"],
-        ) = (port, "testdir", "test")
-        connect = Client(**stub_creds)
-        fetched_file = io.BytesIO(b"0")
-        local_file = connect.put_file(
-            fh=fetched_file, file="foo.mrc", dir="bar", remote=False, check=check
-        )
-        remote_file = connect.put_file(
-            fh=fetched_file, file="foo.mrc", dir="bar", remote=True, check=check
-        )
-        assert remote_file.file_mtime == 1704070800
-        assert local_file.file_mtime == 1704070800
-
-    def test_Client_ftp_put_file_permissions_error_remote(
-        self, mock_file_error, stub_creds
-    ):
-        (
-            stub_creds["port"],
-            stub_creds["remote_dir"],
-            stub_creds["name"],
         ) = (21, "testdir", "test")
         connect = Client(**stub_creds)
-        fetched_file = io.BytesIO(b"0")
+        mock_file_data.file_stream = io.BytesIO(b"0")
         with pytest.raises(ftplib.error_perm):
-            connect.put_file(
-                fh=fetched_file, file="foo.mrc", dir="bar", remote=True, check=False
-            )
+            connect.put_file(files=mock_file_data, dir="bar", remote=True, check=False)
 
-    def test_Client_ftp_put_file_permissions_error_local(
-        self, mock_file_error, stub_creds
+    def test_Client_ftp_put_file_OSError(
+        self, mock_file_error, mock_file_data, stub_creds
     ):
         (
             stub_creds["port"],
@@ -308,27 +349,27 @@ class TestMockClient:
             stub_creds["name"],
         ) = (21, "testdir", "test")
         connect = Client(**stub_creds)
-        fetched_file = io.BytesIO(b"0")
+        mock_file_data.file_stream = io.BytesIO(b"0")
         with pytest.raises(OSError):
-            connect.put_file(
-                fh=fetched_file, file="foo.mrc", dir="bar", remote=False, check=False
-            )
+            connect.put_file(files=mock_file_data, dir="bar", remote=False, check=False)
 
     @pytest.mark.parametrize(
         "remote",
         [True, False],
     )
-    def test_Client_sftp_put_file_not_found(self, mock_file_error, stub_creds, remote):
+    def test_Client_sftp_put_file_OSError(
+        self, mock_file_error, mock_file_data, stub_creds, remote
+    ):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
             stub_creds["name"],
         ) = (22, "testdir", "test")
         connect = Client(**stub_creds)
-        fetched_file = io.BytesIO(b"0")
+        mock_file_data.file_stream = io.BytesIO(b"0")
         with pytest.raises(OSError):
             connect.put_file(
-                fh=fetched_file, file="foo.mrc", dir="bar", remote=remote, check=False
+                files=mock_file_data, dir="bar", remote=remote, check=False
             )
 
     @pytest.mark.parametrize(
@@ -336,7 +377,7 @@ class TestMockClient:
         [(21, True), (21, False), (22, True), (22, False)],
     )
     def test_Client_put_file_exists(
-        self, mock_Client_file_exists, stub_creds, port, remote
+        self, mock_Client_file_exists, mock_file_data, stub_creds, caplog, port, remote
     ):
         (
             stub_creds["port"],
@@ -344,17 +385,33 @@ class TestMockClient:
             stub_creds["name"],
         ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
-        fetched_file = io.BytesIO(b"0")
-        with pytest.raises(FileExistsError):
-            connect.put_file(
-                fh=fetched_file, file="foo.mrc", dir="bar", remote=remote, check=True
-            )
+        mock_file_data.file_stream = io.BytesIO(b"0")
+        connect.put_file(files=mock_file_data, dir="bar", remote=remote, check=True)
+        assert "foo.mrc already exists in bar. Skipping foo.mrc." in caplog.text
+
+    @pytest.mark.parametrize(
+        "port, remote",
+        [(21, True), (21, False), (22, True), (22, False)],
+    )
+    def test_Client_put_files_exists(
+        self, mock_Client_file_exists, mock_file_data, stub_creds, caplog, port, remote
+    ):
+        (
+            stub_creds["port"],
+            stub_creds["remote_dir"],
+            stub_creds["name"],
+        ) = (port, "testdir", "test")
+        connect = Client(**stub_creds)
+        mock_file_data.file_stream = io.BytesIO(b"0")
+        files = [mock_file_data for i in range(3)]
+        connect.put_file(files=files, dir="bar", remote=remote, check=True)
+        assert "foo.mrc already exists in bar. Skipping foo.mrc." in caplog.text
 
 
 @pytest.mark.livetest
 def test_Client_ftp_live_test(live_ftp_creds):
     live_ftp = Client(**live_ftp_creds)
-    files = live_ftp.list_remote_dir()
+    files = live_ftp.list_file_info()
     assert len(files) > 1
     assert "220" in live_ftp.session.connection.getwelcome()
 
@@ -362,29 +419,6 @@ def test_Client_ftp_live_test(live_ftp_creds):
 @pytest.mark.livetest
 def test_Client_sftp_live_test(live_sftp_creds):
     live_sftp = Client(**live_sftp_creds)
-    files = live_sftp.list_remote_dir()
+    files = live_sftp.list_file_info()
     assert len(files) > 1
     assert live_sftp.session.connection.get_channel().active == 1
-
-
-@pytest.mark.livetest
-def test_Client_ftp_NSDROP(live_ftp_creds, NSDROP_creds):
-    with Client(**NSDROP_creds) as nsdrop:
-        with Client(**live_ftp_creds) as vendor_client:
-            logger.debug("Download")
-            downloaded_file = vendor_client.get_file(
-                "Sample_Full_RDA.mrc", live_ftp_creds["remote_dir"]
-            )
-            logger.debug("Write")
-            nsdrop.put_file(
-                downloaded_file,
-                "Sample_Full_RDA.mrc",
-                "NSDROP/file_retriever_test/test_vendor",
-                remote=True,
-                check=False,
-            )
-            logger.debug("Get")
-            get_file = nsdrop.get_file_info(
-                "Sample_Full_RDA.mrc", "NSDROP/file_retriever_test/test_vendor"
-            )
-            assert "Sample_Full_RDA.mrc" == get_file.file_name

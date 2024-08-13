@@ -3,12 +3,12 @@ import ftplib
 import logging
 import os
 import paramiko
-from typing import Dict, List
+from typing import Dict, List, Optional
 import yaml
 import pytest
 from file_retriever._clients import _ftpClient, _sftpClient, _BaseClient
 from file_retriever.connect import Client
-from file_retriever.file import File
+from file_retriever.file import FileInfo
 
 logger = logging.getLogger("file_retriever")
 
@@ -53,7 +53,7 @@ class MockFileData:
 @pytest.fixture
 def mock_file_data():
     file = MockFileData()
-    return File(
+    return FileInfo(
         file.file_name,
         file.st_mtime,
         file.st_size,
@@ -78,11 +78,14 @@ class MockFTP:
     def close(self, *args, **kwargs) -> None:
         pass
 
-    def cwd(self, *args, **kwargs) -> None:
-        pass
+    def cwd(self, pathname) -> str:
+        return pathname
 
     def nlst(self, *args, **kwargs) -> List[str]:
         return ["foo.mrc"]
+
+    def pwd(self, *args, **kwargs) -> str:
+        return "/"
 
     def retrbinary(self, *args, **kwargs) -> bytes:
         file = b"00000"
@@ -119,6 +122,9 @@ class MockSFTPClient:
 
     def get_channel(self, *args, **kwargs) -> MockChannel:
         return MockChannel()
+
+    def getcwd(self) -> Optional[str]:
+        return None
 
     def getfo(self, remotepath, fl, *args, **kwargs) -> bytes:
         return fl.write(b"00000")
@@ -177,6 +183,24 @@ def mock_ftpClient_sftpClient(monkeypatch, mock_open_file, stub_client):
     monkeypatch.setattr(os, "stat", mock_stat)
     monkeypatch.setattr(_ftpClient, "_connect_to_server", mock_ftp_client)
     monkeypatch.setattr(_sftpClient, "_connect_to_server", mock_sftp_client)
+
+
+@pytest.fixture
+def mock_cwd(monkeypatch, mock_ftpClient_sftpClient):
+    def mock_root(*args, **kwargs):
+        return "/"
+
+    monkeypatch.setattr(MockSFTPClient, "getcwd", mock_root)
+    monkeypatch.setattr(MockSFTPClient, "getcwd", mock_root)
+
+
+@pytest.fixture
+def mock_other_dir(monkeypatch, mock_ftpClient_sftpClient):
+    def mock_dir(*args, **kwargs):
+        return "bar"
+
+    monkeypatch.setattr(MockSFTPClient, "getcwd", mock_dir)
+    monkeypatch.setattr(MockSFTPClient, "getcwd", mock_dir)
 
 
 @pytest.fixture

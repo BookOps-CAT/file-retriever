@@ -7,7 +7,7 @@ from typing import Optional, Union
 
 
 @dataclass
-class File:
+class FileInfo:
     """A dataclass to store file information."""
 
     file_name: str
@@ -24,18 +24,19 @@ class File:
         cls,
         data: Union[os.stat_result, paramiko.SFTPAttributes],
         file_name: Optional[str] = None,
-    ) -> "File":
+    ) -> "FileInfo":
         """
-        Creates a `File` object from `os.stat_result` or `paramiko.SFTPAttributes` data.
-        Accepts data returned by `paramiko.SFTPClient.stat`, `paramiko.SFTPClient.put`,
-        `paramiko.SFTPClient.listdir_attr` or `os.stat` methods.
+        Creates a `FileInfo` object from `os.stat_result` or `paramiko.SFTPAttributes`
+        data. Accepts data returned by `paramiko.SFTPClient.stat`,
+        `paramiko.SFTPClient.put`, `paramiko.SFTPClient.listdir_attr` or `os.stat`
+        methods.
 
         Args:
             stat_result_data: data formatted like os.stat_result
             file_name: name of file
 
         Returns:
-            `File` object
+            `FileInfo` object
         """
         if file_name is not None:
             filename = file_name
