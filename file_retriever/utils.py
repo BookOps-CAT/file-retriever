@@ -48,5 +48,7 @@ def client_config(config_path: str) -> List[str]:
         config = yaml.safe_load(file)
         for k, v in config.items():
             os.environ[k] = v
-        vendor_list = [i.strip("_HOST") for i in config.keys() if i.endswith("_HOST")]
+        vendor_list = [
+            i.split("_HOST")[0] for i in config.keys() if i.endswith("_HOST")
+        ]
         return vendor_list

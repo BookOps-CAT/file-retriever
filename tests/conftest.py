@@ -15,8 +15,8 @@ logger = logging.getLogger("file_retriever")
 
 class FakeUtcNow(datetime.datetime):
     @classmethod
-    def now(cls, tzinfo=datetime.timezone.utc):
-        return cls(2024, 6, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
+    def now(cls, tz=datetime.timezone.utc):
+        return cls(2024, 6, 1, 1, 0, 0, 0, datetime.timezone.utc)
 
 
 class MockChannel:
