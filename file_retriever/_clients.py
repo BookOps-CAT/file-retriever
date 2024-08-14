@@ -112,7 +112,6 @@ class _ftpClient(_BaseClient):
             ftplib.error_temp: if unable to connect to server
             ftplib.error_perm: if unable to authenticate with server
         """
-        logger.debug(f"Connecting to {host} via FTP client")
         try:
             ftp_client = ftplib.FTP()
             ftp_client.connect(host=host, port=port)
@@ -121,7 +120,6 @@ class _ftpClient(_BaseClient):
                 user=username,
                 passwd=password,
             )
-            logger.debug(f"Connected at {port} to {host}")
             return ftp_client
         except ftplib.error_perm as e:
             logger.error(f"Unable to authenticate with provided credentials: {e}")
@@ -133,7 +131,6 @@ class _ftpClient(_BaseClient):
     def _check_dir(self, dir: str) -> None:
         """Changes directory to `dir` if not already in `dir`."""
         if self.connection.pwd().lstrip("/") != dir.lstrip("/"):
-            logger.debug(f"Changing cwd to {dir}")
             self.connection.cwd(dir)
         else:
             pass
@@ -230,8 +227,7 @@ class _ftpClient(_BaseClient):
                 file_name = os.path.basename(data)
                 file = self.get_file_data(file_name=file_name, dir=dir)
                 files.append(file)
-        except ftplib.error_perm as e:
-            logger.error(f"Unable to retrieve file data for {dir}: {e}")
+        except ftplib.error_perm:
             raise RetrieverFileError
         return files
 
@@ -337,7 +333,6 @@ class _sftpClient(_BaseClient):
             paramiko.AuthenticationException: if unable to authenticate with server
 
         """
-        logger.debug(f"Connecting to {host} via SFTP client")
         try:
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -348,7 +343,6 @@ class _sftpClient(_BaseClient):
                 password=password,
             )
             sftp_client = ssh.open_sftp()
-            logger.debug(f"Connected at {port} to {host}")
             return sftp_client
         except paramiko.AuthenticationException as e:
             logger.error(f"Unable to authenticate with provided credentials: {e}")
@@ -360,10 +354,8 @@ class _sftpClient(_BaseClient):
     def _check_dir(self, dir: str) -> None:
         wd = self.connection.getcwd()
         if wd is None:
-            logger.debug(f"Changing cwd to {dir}")
             self.connection.chdir(dir)
         elif isinstance(wd, str) and wd.lstrip("/") != dir.lstrip("/"):
-            logger.debug(f"Changing cwd to {dir}")
             self.connection.chdir(None)
             self.connection.chdir(dir)
         else:
@@ -419,8 +411,7 @@ class _sftpClient(_BaseClient):
             return FileInfo.from_stat_data(
                 data=self.connection.stat(file_name), file_name=file_name
             )
-        except OSError as e:
-            logger.error(f"Unable to retrieve file data for {file_name}: {e}")
+        except OSError:
             raise RetrieverFileError
 
     def list_file_data(self, dir: str) -> List[FileInfo]:
