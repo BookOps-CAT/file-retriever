@@ -46,14 +46,14 @@ class Client:
         self.remote_dir = remote_dir
 
         self.session = self.__connect_to_server(username=username, password=password)
-        logger.debug(f"({self.name}) Connected to server")
+        logger.info(f"({self.name}) Connected to server")
 
     def __connect_to_server(
         self, username: str, password: str
     ) -> Union[_ftpClient, _sftpClient]:
         match self.port:
             case 21 | "21":
-                logger.debug(f"({self.name}) Connecting to {self.host} via FTP client")
+                logger.info(f"({self.name}) Connecting to {self.host} via FTP client")
                 return _ftpClient(
                     username=username,
                     password=password,
@@ -61,7 +61,7 @@ class Client:
                     port=self.port,
                 )
             case 22 | "22":
-                logger.debug(f"({self.name}) Connecting to {self.host} via SFTP client")
+                logger.info(f"({self.name}) Connecting to {self.host} via SFTP client")
                 return _sftpClient(
                     username=username,
                     password=password,
@@ -90,9 +90,9 @@ class Client:
 
     def close(self):
         """Closes connection"""
-        logger.debug(f"({self.name}) Closing client session")
+        logger.info(f"({self.name}) Closing client session")
         self.session.close()
-        logger.debug(f"({self.name}) Connection closed")
+        logger.info(f"({self.name}) Connection closed")
 
     def check_connection(self) -> bool:
         """Checks if connection to server is active."""
@@ -114,7 +114,6 @@ class Client:
         """
         if remote:
             try:
-
                 check_file = self.session.get_file_data(
                     file_name=file.file_name, dir=dir
                 )
@@ -144,9 +143,7 @@ class Client:
         """
         if not remote_dir or remote_dir is None:
             remote_dir = self.remote_dir
-        logger.debug(
-            f"({self.name}) Fetching {file.file_name} from " f"`{remote_dir}` directory"
-        )
+        logger.debug(f"({self.name}) Fetching {file.file_name} from " f"`{remote_dir}`")
         return self.session.fetch_file(file=file, dir=remote_dir)
 
     def get_file_info(
@@ -196,9 +193,14 @@ class Client:
 
         if not remote_dir or remote_dir is None:
             remote_dir = self.remote_dir
+        logger.debug(f"({self.name}) Listing all files in `{remote_dir}`")
         files = self.session.list_file_data(dir=remote_dir)
         if time_delta > 0:
-            return [
+            logger.debug(
+                f"({self.name}) Filtering list for files created in "
+                f"the last {time_delta} days"
+            )
+            file_list = [
                 i
                 for i in files
                 if datetime.datetime.fromtimestamp(
@@ -206,7 +208,16 @@ class Client:
                 )
                 >= today - datetime.timedelta(days=time_delta)
             ]
+            if len(file_list) == 0:
+                logger.debug(f"({self.name}) No recent files in `{remote_dir}`")
+                return []
+            else:
+                logger.debug(
+                    f"({self.name}) {len(file_list)} recent files in `{remote_dir}`"
+                )
+                return file_list
         else:
+            logger.debug(f"({self.name}) {len(files)} in `{remote_dir}`")
             return files
 
     def put_file(
@@ -243,16 +254,13 @@ class Client:
             OSError: if unable to write file to directory
         """
         if check:
-            logger.debug(
-                f"({self.name}) Checking for file in destination "
-                f"directory before writing"
-            )
+            logger.debug(f"({self.name}) Checking for file in `{dir}` before writing")
         if check and self.file_exists(file=file, dir=dir, remote=remote) is True:
             logger.debug(
                 f"({self.name}) Skipping {file.file_name}. File already "
-                f"exists in {dir}."
+                f"exists in `{dir}`."
             )
             return None
         else:
-            logger.debug(f"({self.name}) Writing {file.file_name} to {dir} directory")
+            logger.debug(f"({self.name}) Writing {file.file_name} to `{dir}`")
             return self.session.write_file(file=file, dir=dir, remote=remote)
