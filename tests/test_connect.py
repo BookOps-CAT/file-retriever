@@ -331,7 +331,7 @@ class TestMockClient:
         mock_file_info.file_stream = io.BytesIO(b"0")
         connect.put_file(file=mock_file_info, dir="bar", remote=remote, check=True)
         assert (
-            f"Skipping {mock_file_info.file_name}. File already exists in bar."
+            f"Skipping {mock_file_info.file_name}. File already exists in `bar`."
             in caplog.text
         )
 

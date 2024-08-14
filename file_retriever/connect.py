@@ -208,14 +208,10 @@ class Client:
                 )
                 >= today - datetime.timedelta(days=time_delta)
             ]
-            if len(file_list) == 0:
-                logger.debug(f"({self.name}) No recent files in `{remote_dir}`")
-                return []
-            else:
-                logger.debug(
-                    f"({self.name}) {len(file_list)} recent files in `{remote_dir}`"
-                )
-                return file_list
+            logger.debug(
+                f"({self.name}) {len(file_list)} recent files in `{remote_dir}`"
+            )
+            return file_list
         else:
             logger.debug(f"({self.name}) {len(files)} in `{remote_dir}`")
             return files
