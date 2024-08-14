@@ -1,4 +1,5 @@
 import os
+from typing import List
 import yaml
 
 
@@ -30,9 +31,22 @@ def logger_config() -> dict:
     return log_config_dict
 
 
-def vendor_config(config_path: str) -> None:
-    """Set environment variables from config file"""
+def client_config(config_path: str) -> List[str]:
+    """
+    Set environment variables from config file. Returns a list of vendors
+    whose credentials are stored in the config file and have been added to
+    the environment.
+
+    Args:
+        config_path (str): Path to the config file.
+
+    Returns:
+        list of vendors whose credentials are stored in the config file and
+        have been added to the environment.
+    """
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
         for k, v in config.items():
             os.environ[k] = v
+        vendor_list = [i.strip("_HOST") for i in config.keys() if i.endswith("_HOST")]
+        return vendor_list

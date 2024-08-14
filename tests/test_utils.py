@@ -3,7 +3,7 @@ import logging
 import logging.config
 import os
 import pytest
-from file_retriever.utils import logger_config, vendor_config
+from file_retriever.utils import logger_config, client_config
 
 
 def test_logger_config():
@@ -49,8 +49,9 @@ def test_vendor_config(mocker):
     m = mocker.mock_open(read_data=yaml_string)
     mocker.patch("builtins.open", m)
 
-    vendor_config("foo.yaml")
-
+    client_list = client_config("foo.yaml")
+    assert len(client_list) == 1
+    assert client_list == ["TEST"]
     assert os.environ["TEST_HOST"] == "foo"
     assert os.environ["TEST_USER"] == "bar"
     assert os.environ["TEST_PASSWORD"] == "baz"
