@@ -1,6 +1,4 @@
-import ftplib
 import io
-import paramiko
 import logging
 import logging.config
 import pytest
@@ -8,6 +6,10 @@ from file_retriever.connect import Client
 from file_retriever._clients import _ftpClient, _sftpClient
 from file_retriever.file import FileInfo, File
 from file_retriever.utils import logger_config
+from file_retriever.errors import (
+    RetrieverFileError,
+    RetrieverAuthenticationError,
+)
 
 logger = logging.getLogger("file_retriever")
 config = logger_config()
@@ -59,7 +61,7 @@ class TestMockClient:
             stub_creds["remote_dir"],
             stub_creds["name"],
         ) = (21, "testdir", "test")
-        with pytest.raises(ftplib.error_perm):
+        with pytest.raises(RetrieverAuthenticationError):
             Client(**stub_creds)
 
     def test_Client_sftp_auth_error(self, mock_auth_error, stub_creds):
@@ -68,7 +70,7 @@ class TestMockClient:
             stub_creds["remote_dir"],
             stub_creds["name"],
         ) = (22, "testdir", "test")
-        with pytest.raises(paramiko.AuthenticationException):
+        with pytest.raises(RetrieverAuthenticationError):
             Client(**stub_creds)
 
     @pytest.mark.parametrize(
@@ -102,8 +104,8 @@ class TestMockClient:
         "port",
         [21, 22],
     )
-    def test_Client_file_exists_true_local(
-        self, mock_Client_file_exists, stub_creds, port
+    def test_Client_file_exists_true(
+        self, mock_Client_file_exists, stub_creds, port, mock_file_info
     ):
         (
             stub_creds["port"],
@@ -111,33 +113,28 @@ class TestMockClient:
             stub_creds["name"],
         ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
-        file_exists = connect.file_exists(file_name="foo.mrc", dir="bar", remote=False)
-        assert file_exists is True
+        get_file = connect.get_file_info(file_name="foo.mrc", remote_dir="testdir")
+        local_file_exists = connect.file_exists(
+            file=mock_file_info, dir="bar", remote=False
+        )
+        assert mock_file_info.file_name == get_file.file_name
+        assert mock_file_info.file_size == get_file.file_size
+        remote_file_exists = connect.file_exists(
+            file=mock_file_info, dir="bar", remote=True
+        )
+        assert local_file_exists is True
+        assert remote_file_exists is True
 
-    @pytest.mark.parametrize(
-        "port",
-        [21, 22],
-    )
-    def test_Client_file_exists_true_remote(
-        self, mock_Client_file_exists, stub_creds, port
+    def test_Client_file_exists_sftp_file_not_found(
+        self, mock_file_error, stub_creds, mock_file_info
     ):
-        (
-            stub_creds["port"],
-            stub_creds["remote_dir"],
-            stub_creds["name"],
-        ) = (port, "testdir", "test")
-        connect = Client(**stub_creds)
-        file_exists = connect.file_exists(file_name="foo.mrc", dir="bar", remote=True)
-        assert file_exists is True
-
-    def test_Client_file_exists_sftp_file_not_found(self, mock_file_error, stub_creds):
         (
             stub_creds["port"],
             stub_creds["remote_dir"],
             stub_creds["name"],
         ) = (22, "testdir", "test")
         connect = Client(**stub_creds)
-        file_exists = connect.file_exists(file_name="foo.mrc", dir="bar", remote=True)
+        file_exists = connect.file_exists(file=mock_file_info, dir="bar", remote=True)
         assert file_exists is False
 
     @pytest.mark.parametrize(
@@ -179,7 +176,7 @@ class TestMockClient:
         ) = (21, "testdir", "test")
         connect = Client(**stub_creds)
         file_obj = File.from_fileinfo(file=mock_file_info, file_stream=io.BytesIO(b"0"))
-        with pytest.raises(ftplib.error_perm):
+        with pytest.raises(RetrieverFileError):
             connect.get_file(files=file_obj, remote_dir="bar_dir")
 
     def test_Client_sftp_get_file_not_found(
@@ -192,7 +189,7 @@ class TestMockClient:
         ) = (22, "testdir", "test")
         connect = Client(**stub_creds)
         file_obj = File.from_fileinfo(file=mock_file_info, file_stream=io.BytesIO(b"0"))
-        with pytest.raises(OSError):
+        with pytest.raises(RetrieverFileError):
             connect.get_file(files=file_obj, remote_dir="bar_dir")
 
     @pytest.mark.parametrize(
@@ -223,7 +220,7 @@ class TestMockClient:
             stub_creds["name"],
         ) = (21, "testdir", "test")
         connect = Client(**stub_creds)
-        with pytest.raises(ftplib.error_perm):
+        with pytest.raises(RetrieverFileError):
             connect.get_file_info(file_name="foo.mrc", remote_dir="testdir")
 
     def test_Client_sftp_get_file_info_not_found(self, mock_file_error, stub_creds):
@@ -233,7 +230,7 @@ class TestMockClient:
             stub_creds["name"],
         ) = (22, "testdir", "test")
         connect = Client(**stub_creds)
-        with pytest.raises(OSError):
+        with pytest.raises(RetrieverFileError):
             connect.get_file_info(file_name="foo.mrc", remote_dir="testdir")
 
     @pytest.mark.parametrize("port, uid_gid", [(21, None), (22, 0)])
@@ -259,18 +256,6 @@ class TestMockClient:
         assert all_files[0].file_atime is None
         assert recent_files == []
 
-    def test_Client_list_ftp_file_not_found(
-        self, mock_connection_error_reply, stub_creds
-    ):
-        (
-            stub_creds["port"],
-            stub_creds["remote_dir"],
-            stub_creds["name"],
-        ) = (21, "testdir", "test")
-        connect = Client(**stub_creds)
-        with pytest.raises(ftplib.error_reply):
-            connect.list_file_info()
-
     def test_Client_list_sftp_file_not_found(self, mock_file_error, stub_creds):
         (
             stub_creds["port"],
@@ -278,7 +263,7 @@ class TestMockClient:
             stub_creds["name"],
         ) = (22, "testdir", "test")
         connect = Client(**stub_creds)
-        with pytest.raises(OSError):
+        with pytest.raises(RetrieverFileError):
             connect.list_file_info()
 
     @pytest.mark.parametrize(
@@ -340,7 +325,7 @@ class TestMockClient:
         ) = (21, "testdir", "test")
         connect = Client(**stub_creds)
         mock_file_info.file_stream = io.BytesIO(b"0")
-        with pytest.raises(ftplib.error_perm):
+        with pytest.raises(RetrieverFileError):
             connect.put_file(files=mock_file_info, dir="bar", remote=True, check=False)
 
     def test_Client_ftp_put_file_OSError(
@@ -353,7 +338,7 @@ class TestMockClient:
         ) = (21, "testdir", "test")
         connect = Client(**stub_creds)
         mock_file_info.file_stream = io.BytesIO(b"0")
-        with pytest.raises(OSError):
+        with pytest.raises(RetrieverFileError):
             connect.put_file(files=mock_file_info, dir="bar", remote=False, check=False)
 
     @pytest.mark.parametrize(
@@ -370,7 +355,7 @@ class TestMockClient:
         ) = (22, "testdir", "test")
         connect = Client(**stub_creds)
         mock_file_info.file_stream = io.BytesIO(b"0")
-        with pytest.raises(OSError):
+        with pytest.raises(RetrieverFileError):
             connect.put_file(
                 files=mock_file_info, dir="bar", remote=remote, check=False
             )
@@ -390,7 +375,10 @@ class TestMockClient:
         connect = Client(**stub_creds)
         mock_file_info.file_stream = io.BytesIO(b"0")
         connect.put_file(files=mock_file_info, dir="bar", remote=remote, check=True)
-        assert "foo.mrc already exists in bar. Skipping foo.mrc." in caplog.text
+        assert (
+            f"Skipping {mock_file_info.file_name}. File already exists in bar."
+            in caplog.text
+        )
 
     @pytest.mark.parametrize(
         "port, remote",
@@ -408,7 +396,10 @@ class TestMockClient:
         mock_file_info.file_stream = io.BytesIO(b"0")
         files = [mock_file_info for i in range(3)]
         connect.put_file(files=files, dir="bar", remote=remote, check=True)
-        assert "foo.mrc already exists in bar. Skipping foo.mrc." in caplog.text
+        assert (
+            f"Skipping {mock_file_info.file_name}. File already exists in bar."
+            in caplog.text
+        )
 
 
 @pytest.mark.livetest

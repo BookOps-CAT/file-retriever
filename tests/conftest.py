@@ -56,13 +56,13 @@ class MockFileData:
 
     def file_info(self):
         return FileInfo(
-            self.file_name,
-            self.st_mtime,
-            self.st_size,
-            self.st_uid,
-            self.st_gid,
-            self.st_atime,
-            self.st_mode,
+            file_name=self.file_name,
+            file_mtime=self.st_mtime,
+            file_size=self.st_size,
+            file_uid=self.st_uid,
+            file_gid=self.st_gid,
+            file_atime=self.st_atime,
+            file_mode=self.st_mode,
         )
 
     def os_stat_result(self):
@@ -103,7 +103,7 @@ class MockFTP:
         return pathname
 
     def nlst(self, *args, **kwargs) -> List[str]:
-        return ["foo.mrc"]
+        return [MockFileData().file_name]
 
     def pwd(self, *args, **kwargs) -> str:
         return "/"
@@ -117,7 +117,7 @@ class MockFTP:
         return args[1](files)
 
     def size(self, *args, **kwargs) -> int:
-        return 140401
+        return MockFileData().st_size
 
     def storbinary(self, *args, **kwargs) -> None:
         pass
@@ -138,9 +138,6 @@ class MockSFTPClient:
     def close(self, *args, **kwargs) -> None:
         pass
 
-    def get(self, remotepath, localpath, *args, **kwargs) -> None:
-        open(localpath, "x+")
-
     def get_channel(self, *args, **kwargs) -> MockChannel:
         return MockChannel()
 
@@ -152,9 +149,6 @@ class MockSFTPClient:
 
     def listdir_attr(self, *args, **kwargs) -> List[paramiko.SFTPAttributes]:
         return [MockFileData().sftp_attr()]
-
-    def put(self, *args, **kwargs) -> paramiko.SFTPAttributes:
-        return MockFileData().sftp_attr()
 
     def putfo(self, *args, **kwargs) -> paramiko.SFTPAttributes:
         return MockFileData().sftp_attr()
@@ -278,13 +272,12 @@ def mock_file_error(monkeypatch, mock_open_file, mock_ftpClient_sftpClient):
 
     monkeypatch.setattr(MockFTP, "voidcmd", mock_ftp_error_perm)
     monkeypatch.setattr(MockFTP, "size", mock_ftp_error_perm)
+    monkeypatch.setattr(MockFTP, "nlst", mock_ftp_error_perm)
     monkeypatch.setattr(MockFTP, "retrlines", mock_retrlines)
     monkeypatch.setattr(MockFTP, "retrbinary", mock_ftp_error_perm)
     monkeypatch.setattr(MockFTP, "storbinary", mock_ftp_error_perm)
     monkeypatch.setattr(MockSFTPClient, "stat", mock_os_error)
-    monkeypatch.setattr(MockSFTPClient, "get", mock_os_error)
     monkeypatch.setattr(MockSFTPClient, "getfo", mock_os_error)
-    monkeypatch.setattr(MockSFTPClient, "put", mock_os_error)
     monkeypatch.setattr(MockSFTPClient, "putfo", mock_os_error)
     monkeypatch.setattr(MockSFTPClient, "listdir_attr", mock_os_error)
     monkeypatch.setattr(os, "stat", mock_os_error)

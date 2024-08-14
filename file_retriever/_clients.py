@@ -11,8 +11,13 @@ import io
 import logging
 import os
 import paramiko
-from typing import List, Union, Optional
+from typing import List, Union
 from file_retriever.file import FileInfo, File
+from file_retriever.errors import (
+    RetrieverFileError,
+    RetrieverConnectionError,
+    RetrieverAuthenticationError,
+)
 
 logger = logging.getLogger("file_retriever")
 
@@ -120,10 +125,10 @@ class _ftpClient(_BaseClient):
             return ftp_client
         except ftplib.error_perm as e:
             logger.error(f"Unable to authenticate with provided credentials: {e}")
-            raise
+            raise RetrieverAuthenticationError
         except ftplib.error_temp as e:
             logger.error(f"Unable to connect to {host}: {e}")
-            raise
+            raise RetrieverConnectionError
 
     def _check_dir(self, dir: str) -> None:
         """Changes directory to `dir` if not already in `dir`."""
@@ -131,7 +136,7 @@ class _ftpClient(_BaseClient):
             logger.debug(f"Changing cwd to {dir}")
             self.connection.cwd(dir)
         else:
-            logger.debug(f"Already in {dir}")
+            pass
 
     def close(self) -> None:
         """Closes connection to server."""
@@ -157,16 +162,14 @@ class _ftpClient(_BaseClient):
         try:
             self._check_dir(dir)
             fh = io.BytesIO()
-            logger.debug(f"Fetching {file.file_name} from {dir}")
             self.connection.retrbinary(f"RETR {file.file_name}", fh.write)
-            logger.debug(f"File fetched from {dir}")
             fetched_file = File.from_fileinfo(file=file, file_stream=fh)
             return fetched_file
         except ftplib.error_perm as e:
             logger.error(f"Unable to retrieve {file} from {dir}: {e}")
-            raise
+            raise RetrieverFileError
 
-    def get_file_data(self, file_name: str, dir: Optional[str] = None) -> FileInfo:
+    def get_file_data(self, file_name: str, dir: str) -> FileInfo:
         """
         Retrieves metadata for single file on server.
 
@@ -182,8 +185,7 @@ class _ftpClient(_BaseClient):
                 if unable to retrieve file data due to permissions error
         """
         try:
-            if dir is not None:
-                self._check_dir(dir)
+            self._check_dir(dir)
 
             permissions = None
 
@@ -196,14 +198,14 @@ class _ftpClient(_BaseClient):
                 logger.error(f"{file_name} not found on server.")
                 raise ftplib.error_perm("File not found on server.")
             return FileInfo(
-                file_name=os.path.basename(file_name),
+                file_name=file_name,
                 file_size=self.connection.size(file_name),
                 file_mtime=self.connection.voidcmd(f"MDTM {file_name}")[4:],
                 file_mode=permissions,
             )
         except ftplib.error_perm as e:
             logger.error(f"Unable to retrieve file data for {file_name}: {e}")
-            raise
+            raise RetrieverFileError
 
     def list_file_data(self, dir: str) -> List[FileInfo]:
         """
@@ -225,12 +227,12 @@ class _ftpClient(_BaseClient):
         try:
             file_data_list = self.connection.nlst(dir)
             for data in file_data_list:
-                file = self.get_file_data(file_name=data)
+                file_name = os.path.basename(data)
+                file = self.get_file_data(file_name=file_name, dir=dir)
                 files.append(file)
         except ftplib.error_perm as e:
             logger.error(f"Unable to retrieve file data for {dir}: {e}")
-            raise
-        logger.debug(f"Retrieved file data for {len(files)} files in {dir}")
+            raise RetrieverFileError
         return files
 
     def is_active(self) -> bool:
@@ -278,7 +280,7 @@ class _ftpClient(_BaseClient):
                 logger.error(
                     f"Unable to write {file.file_name} to remote directory: {e}"
                 )
-                raise
+                raise RetrieverFileError
         else:
             try:
                 local_file = f"{dir}/{file.file_name}"
@@ -291,7 +293,7 @@ class _ftpClient(_BaseClient):
                 logger.error(
                     f"Unable to write {file.file_name} to local directory: {e}"
                 )
-                raise
+                raise RetrieverFileError
 
 
 class _sftpClient(_BaseClient):
@@ -350,10 +352,10 @@ class _sftpClient(_BaseClient):
             return sftp_client
         except paramiko.AuthenticationException as e:
             logger.error(f"Unable to authenticate with provided credentials: {e}")
-            raise
+            raise RetrieverAuthenticationError
         except paramiko.SSHException as e:
             logger.error(f"Unable to connect to {host}: {e}")
-            raise
+            raise RetrieverConnectionError
 
     def _check_dir(self, dir: str) -> None:
         wd = self.connection.getcwd()
@@ -365,7 +367,7 @@ class _sftpClient(_BaseClient):
             self.connection.chdir(None)
             self.connection.chdir(dir)
         else:
-            logger.debug(f"Already in {dir}")
+            pass
 
     def close(self):
         """Closes connection to server."""
@@ -391,13 +393,12 @@ class _sftpClient(_BaseClient):
         try:
             self._check_dir(dir)
             fh = io.BytesIO()
-            logger.debug(f"Fetching {file.file_name} from {dir}")
             self.connection.getfo(remotepath=file.file_name, fl=fh)
             fetched_file = File.from_fileinfo(file=file, file_stream=fh)
             return fetched_file
         except OSError as e:
             logger.error(f"Unable to retrieve {file.file_name} from {dir}: {e}")
-            raise
+            raise RetrieverFileError
 
     def get_file_data(self, file_name: str, dir: str) -> FileInfo:
         """
@@ -415,13 +416,12 @@ class _sftpClient(_BaseClient):
         """
         try:
             self._check_dir(dir)
-            logger.debug(f"Retrieving file data for {file_name}")
             return FileInfo.from_stat_data(
                 data=self.connection.stat(file_name), file_name=file_name
             )
         except OSError as e:
             logger.error(f"Unable to retrieve file data for {file_name}: {e}")
-            raise
+            raise RetrieverFileError
 
     def list_file_data(self, dir: str) -> List[FileInfo]:
         """
@@ -438,11 +438,10 @@ class _sftpClient(_BaseClient):
         """
         try:
             file_metadata = self.connection.listdir_attr(dir)
-            logger.debug(f"Retrieved file data for {len(file_metadata)} files in {dir}")
             return [FileInfo.from_stat_data(data=i) for i in file_metadata]
         except OSError as e:
             logger.error(f"Unable to retrieve file data for {dir}: {e}")
-            raise
+            raise RetrieverFileError
 
     def is_active(self) -> bool:
         """
@@ -486,16 +485,12 @@ class _sftpClient(_BaseClient):
                     file.file_stream,
                     remotepath=file.file_name,
                 )
-                logger.debug(
-                    f"File written to {dir}: "
-                    f"{FileInfo.from_stat_data(written_file, file_name=file.file_name)}"
-                )
                 return FileInfo.from_stat_data(written_file, file_name=file.file_name)
             except OSError as e:
                 logger.error(
                     f"Unable to write {file.file_name} to remote directory: {e}"
                 )
-                raise
+                raise RetrieverFileError
         else:
             try:
                 local_file = f"{dir}/{file}"
@@ -506,4 +501,4 @@ class _sftpClient(_BaseClient):
                 logger.error(
                     f"Unable to write {file.file_name} to local directory: {e}"
                 )
-                raise
+                raise RetrieverFileError

@@ -9,6 +9,7 @@ import os
 from typing import List, Optional, Union
 from file_retriever._clients import _ftpClient, _sftpClient
 from file_retriever.file import FileInfo, File
+from file_retriever.errors import RetrieverFileError
 
 logger = logging.getLogger("file_retriever")
 
@@ -90,7 +91,7 @@ class Client:
         """Checks if connection to server is active."""
         return self.session.is_active()
 
-    def file_exists(self, file_name: str, dir: str, remote: bool) -> bool:
+    def file_exists(self, file: FileInfo, dir: str, remote: bool) -> bool:
         """
         Check if file with the name `file_name` exists in `dir`. If `remote`
         is True then check will be performed on server, otherwise check will
@@ -104,14 +105,20 @@ class Client:
         Returns:
             bool indicating if file exists in `dir`
         """
+        logger.debug(f"Checking if {file.file_name} exists in {dir}")
         if remote:
             try:
-                remote_file = self.session.get_file_data(file_name=file_name, dir=dir)
-                return remote_file.file_name == file_name
-            except OSError:
+                check_file = self.get_file_info(
+                    file_name=file.file_name, remote_dir=dir
+                )
+                return (
+                    check_file.file_name == file.file_name
+                    and check_file.file_size == file.file_size
+                )
+            except RetrieverFileError:
                 return False
         else:
-            return os.path.exists(f"{dir}/{file_name}")
+            return os.path.exists(f"{dir}/{file.file_name}")
 
     def get_file(
         self, files: Union[FileInfo, List[FileInfo]], remote_dir: Optional[str] = None
@@ -131,14 +138,21 @@ class Client:
             file(s) fetched from `remote_dir` as `File` object(s)
         """
         if not remote_dir or remote_dir is None:
-            logger.debug(f"Param `remote_dir` not passed. Using {self.remote_dir}.")
             remote_dir = self.remote_dir
         if isinstance(files, list):
             file_list = []
             for file in files:
+                logger.debug(
+                    f"Fetching {file.file_name} from {remote_dir} "
+                    f"on {self.host} ({self.name})"
+                )
                 file_list.append(self.session.fetch_file(file=file, dir=remote_dir))
             return file_list
         else:
+            logger.debug(
+                f"Fetching {files.file_name} from {remote_dir} "
+                f"on {self.host} ({self.name})"
+            )
             return self.session.fetch_file(file=files, dir=remote_dir)
 
     def get_file_info(
@@ -156,8 +170,8 @@ class Client:
             file in `remote_dir` represented as `FileInfo` object
         """
         if not remote_dir or remote_dir is None:
-            logger.debug(f"Param `remote_dir` not passed. Using {self.remote_dir}.")
             remote_dir = self.remote_dir
+        logger.debug(f"Retrieving file info for {file_name} from {remote_dir}")
         return self.session.get_file_data(file_name=file_name, dir=remote_dir)
 
     def list_file_info(
@@ -179,11 +193,13 @@ class Client:
         today = datetime.datetime.now()
 
         if not remote_dir or remote_dir is None:
-            logger.debug(f"Param `remote_dir` not passed. Using {self.remote_dir}.")
             remote_dir = self.remote_dir
         files = self.session.list_file_data(dir=remote_dir)
         if time_delta > 0:
-            logger.debug(f"Checking for files modified in last {time_delta} days.")
+            logger.debug(
+                f"Retrieving file info for files modified in last {time_delta} "
+                f"days from {remote_dir}"
+            )
             return [
                 i
                 for i in files
@@ -193,6 +209,7 @@ class Client:
                 >= today - datetime.timedelta(days=time_delta)
             ]
         else:
+            logger.debug(f"Retrieving file info for all files in {remote_dir}")
             return files
 
     def put_file(
@@ -231,12 +248,12 @@ class Client:
         if isinstance(files, list):
             get_files = []
             for file in files:
-                if check and self.file_exists(
-                    file_name=file.file_name, dir=dir, remote=remote
+                if (
+                    check
+                    and self.file_exists(file=file, dir=dir, remote=remote) is True
                 ):
-                    logger.error(
-                        f"{file.file_name} already exists in {dir}. "
-                        f"Skipping {file.file_name}."
+                    logger.info(
+                        f"Skipping {file.file_name}. File already exists in {dir}."
                     )
                     continue
                 else:
@@ -249,12 +266,9 @@ class Client:
                 )
             return written_files
         elif isinstance(files, FileInfo):
-            if check and self.file_exists(
-                file_name=files.file_name, dir=dir, remote=remote
-            ):
-                logger.error(
-                    f"{files.file_name} already exists in {dir}. "
-                    f"Skipping {files.file_name}."
+            if check and self.file_exists(file=files, dir=dir, remote=remote) is True:
+                logger.info(
+                    f"Skipping {files.file_name}. File already exists in {dir}."
                 )
                 return None
             else:
