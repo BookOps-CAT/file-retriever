@@ -174,7 +174,9 @@ class Client:
             raise e
 
     def list_file_info(
-        self, time_delta: int = 0, remote_dir: Optional[str] = None
+        self,
+        time_delta: Union[datetime.timedelta, int] = 0,
+        remote_dir: Optional[str] = None,
     ) -> List[FileInfo]:
         """
         Lists each file in `remote_dir` directory on server. If `remote_dir` is not
@@ -183,19 +185,25 @@ class Client:
         is the `time_delta`.
 
         Args:
-            time_delta: number of days to go back in time to list files
-            remote_dir: directory on server to interact with
+            time_delta:
+                how far back to check for files. can be an integer representing
+                the number of days or a `datetime.timedelta` object
+            remote_dir:
+                directory on server to interact with
 
         Returns:
             list of files in `remote_dir` represented as `FileInfo` objects
         """
         today = datetime.datetime.now(tz=datetime.timezone.utc)
-
+        if isinstance(time_delta, int):
+            time_delta = datetime.timedelta(days=time_delta)
+        else:
+            time_delta = time_delta
         if not remote_dir or remote_dir is None:
             remote_dir = self.remote_dir
         logger.debug(f"({self.name}) Listing all files in `{remote_dir}`")
         files = self.session.list_file_data(dir=remote_dir)
-        if time_delta > 0:
+        if time_delta > datetime.timedelta(days=0):
             logger.debug(
                 f"({self.name}) Filtering list for files created in "
                 f"the last {time_delta} days"
@@ -206,7 +214,7 @@ class Client:
                 if datetime.datetime.fromtimestamp(
                     i.file_mtime, tz=datetime.timezone.utc
                 )
-                >= today - datetime.timedelta(days=time_delta)
+                >= today - time_delta
             ]
             logger.debug(
                 f"({self.name}) {len(file_list)} recent files in `{remote_dir}`"

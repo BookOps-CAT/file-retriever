@@ -1,3 +1,4 @@
+import datetime
 import io
 import logging
 import logging.config
@@ -228,11 +229,16 @@ class TestMockClient:
         ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
         all_files = connect.list_file_info()
-        recent_files = connect.list_file_info(time_delta=5, remote_dir="testdir")
+        recent_files_int = connect.list_file_info(time_delta=5, remote_dir="testdir")
+        recent_files_dt = connect.list_file_info(
+            time_delta=datetime.timedelta(days=5), remote_dir="testdir"
+        )
         assert all(isinstance(file, FileInfo) for file in all_files)
-        assert all(isinstance(file, FileInfo) for file in recent_files)
+        assert all(isinstance(file, FileInfo) for file in recent_files_int)
+        assert all(isinstance(file, FileInfo) for file in recent_files_dt)
         assert len(all_files) == 1
-        assert len(recent_files) == 0
+        assert len(recent_files_int) == 0
+        assert len(recent_files_dt) == 0
         assert all_files[0].file_name == "foo.mrc"
         assert all_files[0].file_mtime == 1704070800
         assert all_files[0].file_size == 140401
@@ -240,7 +246,8 @@ class TestMockClient:
         assert all_files[0].file_uid == uid_gid
         assert all_files[0].file_gid == uid_gid
         assert all_files[0].file_atime is None
-        assert recent_files == []
+        assert recent_files_int == []
+        assert recent_files_dt == []
 
     def test_Client_list_sftp_file_not_found(self, mock_file_error, stub_creds):
         (
