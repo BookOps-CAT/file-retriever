@@ -148,23 +148,9 @@ class TestMockClient:
             stub_creds["name"],
         ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
-        single_file = File.from_fileinfo(
-            file=mock_file_info, file_stream=io.BytesIO(b"0")
-        )
-        multiple_files = [
-            File.from_fileinfo(file=mock_file_info, file_stream=io.BytesIO(b"0"))
-            for i in range(3)
-        ]
-        (
-            multiple_files[0].file_stream,
-            multiple_files[1].file_stream,
-            multiple_files[2].file_stream,
-        ) = (io.BytesIO(b"0"), io.BytesIO(b"1"), io.BytesIO(b"2"))
-        file = connect.get_file(files=single_file, remote_dir=dir)
-        files = connect.get_file(files=multiple_files, remote_dir=dir)
+        file = File.from_fileinfo(file=mock_file_info, file_stream=io.BytesIO(b"0"))
+        file = connect.get_file(file=file, remote_dir=dir)
         assert isinstance(file, File)
-        assert len(files) == 3
-        assert all(isinstance(f, File) for f in files)
 
     def test_Client_ftp_get_file_error_perm(
         self, mock_file_error, mock_file_info, stub_creds
@@ -177,7 +163,7 @@ class TestMockClient:
         connect = Client(**stub_creds)
         file_obj = File.from_fileinfo(file=mock_file_info, file_stream=io.BytesIO(b"0"))
         with pytest.raises(RetrieverFileError):
-            connect.get_file(files=file_obj, remote_dir="bar_dir")
+            connect.get_file(file=file_obj, remote_dir="bar_dir")
 
     def test_Client_sftp_get_file_not_found(
         self, mock_file_error, mock_file_info, stub_creds
@@ -190,7 +176,7 @@ class TestMockClient:
         connect = Client(**stub_creds)
         file_obj = File.from_fileinfo(file=mock_file_info, file_stream=io.BytesIO(b"0"))
         with pytest.raises(RetrieverFileError):
-            connect.get_file(files=file_obj, remote_dir="bar_dir")
+            connect.get_file(file=file_obj, remote_dir="bar_dir")
 
     @pytest.mark.parametrize(
         "port, dir, uid_gid",
@@ -281,39 +267,10 @@ class TestMockClient:
         connect = Client(**stub_creds)
         file = mock_file_info
         file.file_stream = io.BytesIO(b"0")
-        local_file = connect.put_file(files=file, dir="bar", remote=False, check=check)
-        remote_file = connect.put_file(files=file, dir="bar", remote=True, check=check)
+        local_file = connect.put_file(file=file, dir="bar", remote=False, check=check)
+        remote_file = connect.put_file(file=file, dir="bar", remote=True, check=check)
         assert remote_file.file_mtime == 1704070800
         assert local_file.file_mtime == 1704070800
-
-    @pytest.mark.parametrize(
-        "port, check",
-        [(21, True), (21, False), (22, True), (22, False)],
-    )
-    def test_Client_put_files(
-        self, mock_Client, mock_file_info, stub_creds, port, check
-    ):
-        (
-            stub_creds["port"],
-            stub_creds["remote_dir"],
-            stub_creds["name"],
-        ) = (port, "testdir", "test")
-        connect = Client(**stub_creds)
-        files = [mock_file_info for i in range(3)]
-        (
-            files[0].file_stream,
-            files[1].file_stream,
-            files[2].file_stream,
-        ) = (io.BytesIO(b"0"), io.BytesIO(b"1"), io.BytesIO(b"2"))
-        local_files = connect.put_file(
-            files=files, dir="bar", remote=False, check=check
-        )
-        remote_files = connect.put_file(
-            files=files, dir="bar", remote=True, check=check
-        )
-        assert len(local_files) == 3
-        assert len(remote_files) == 3
-        assert all(isinstance(f, FileInfo) for f in files)
 
     def test_Client_ftp_put_file_error_perm(
         self, mock_file_error, mock_file_info, stub_creds
@@ -326,7 +283,7 @@ class TestMockClient:
         connect = Client(**stub_creds)
         mock_file_info.file_stream = io.BytesIO(b"0")
         with pytest.raises(RetrieverFileError):
-            connect.put_file(files=mock_file_info, dir="bar", remote=True, check=False)
+            connect.put_file(file=mock_file_info, dir="bar", remote=True, check=False)
 
     def test_Client_ftp_put_file_OSError(
         self, mock_file_error, mock_file_info, stub_creds
@@ -339,7 +296,7 @@ class TestMockClient:
         connect = Client(**stub_creds)
         mock_file_info.file_stream = io.BytesIO(b"0")
         with pytest.raises(RetrieverFileError):
-            connect.put_file(files=mock_file_info, dir="bar", remote=False, check=False)
+            connect.put_file(file=mock_file_info, dir="bar", remote=False, check=False)
 
     @pytest.mark.parametrize(
         "remote",
@@ -356,9 +313,7 @@ class TestMockClient:
         connect = Client(**stub_creds)
         mock_file_info.file_stream = io.BytesIO(b"0")
         with pytest.raises(RetrieverFileError):
-            connect.put_file(
-                files=mock_file_info, dir="bar", remote=remote, check=False
-            )
+            connect.put_file(file=mock_file_info, dir="bar", remote=remote, check=False)
 
     @pytest.mark.parametrize(
         "port, remote",
@@ -374,28 +329,7 @@ class TestMockClient:
         ) = (port, "testdir", "test")
         connect = Client(**stub_creds)
         mock_file_info.file_stream = io.BytesIO(b"0")
-        connect.put_file(files=mock_file_info, dir="bar", remote=remote, check=True)
-        assert (
-            f"Skipping {mock_file_info.file_name}. File already exists in bar."
-            in caplog.text
-        )
-
-    @pytest.mark.parametrize(
-        "port, remote",
-        [(21, True), (21, False), (22, True), (22, False)],
-    )
-    def test_Client_put_files_exists(
-        self, mock_Client_file_exists, mock_file_info, stub_creds, caplog, port, remote
-    ):
-        (
-            stub_creds["port"],
-            stub_creds["remote_dir"],
-            stub_creds["name"],
-        ) = (port, "testdir", "test")
-        connect = Client(**stub_creds)
-        mock_file_info.file_stream = io.BytesIO(b"0")
-        files = [mock_file_info for i in range(3)]
-        connect.put_file(files=files, dir="bar", remote=remote, check=True)
+        connect.put_file(file=mock_file_info, dir="bar", remote=remote, check=True)
         assert (
             f"Skipping {mock_file_info.file_name}. File already exists in bar."
             in caplog.text

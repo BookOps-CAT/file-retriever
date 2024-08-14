@@ -127,9 +127,7 @@ class Client:
         else:
             return os.path.exists(f"{dir}/{file.file_name}")
 
-    def get_file(
-        self, files: Union[FileInfo, List[FileInfo]], remote_dir: Optional[str] = None
-    ) -> Union[File, List[File]]:
+    def get_file(self, file: FileInfo, remote_dir: Optional[str] = None) -> File:
         """
         Fetches one or more files from `remote_dir` on server. If `remote_dir` is
         not provided then file will be fetched from `self.remote_dir`.
@@ -146,21 +144,10 @@ class Client:
         """
         if not remote_dir or remote_dir is None:
             remote_dir = self.remote_dir
-        if isinstance(files, list):
-            file_list = []
-            for file in files:
-                logger.debug(
-                    f"({self.name}) Fetching {file.file_name} from "
-                    f"`{remote_dir}` directory"
-                )
-                file_list.append(self.session.fetch_file(file=file, dir=remote_dir))
-            return file_list
-        else:
-            logger.debug(
-                f"({self.name}) Fetching {files.file_name} from "
-                f"`{remote_dir}` directory"
-            )
-            return self.session.fetch_file(file=files, dir=remote_dir)
+        logger.debug(
+            f"({self.name}) Fetching {file.file_name} from " f"`{remote_dir}` directory"
+        )
+        return self.session.fetch_file(file=file, dir=remote_dir)
 
     def get_file_info(
         self, file_name: str, remote_dir: Optional[str] = None
@@ -224,11 +211,11 @@ class Client:
 
     def put_file(
         self,
-        files: Union[File, List[File]],
+        file: File,
         dir: str,
         remote: bool,
         check: bool,
-    ) -> Optional[Union[FileInfo, List[FileInfo]]]:
+    ) -> Optional[FileInfo]:
         """
         Writes fetched file(s) to directory. Takes one or more `File` objects and
         writes them to `dir` directory. If `remote` is True, then file is written
@@ -260,38 +247,12 @@ class Client:
                 f"({self.name}) Checking for file in destination "
                 f"directory before writing"
             )
-        if isinstance(files, list):
-            get_files = []
-            for file in files:
-                if (
-                    check
-                    and self.file_exists(file=file, dir=dir, remote=remote) is True
-                ):
-                    logger.debug(
-                        f"({self.name}) Skipping {file.file_name}. File already "
-                        f"exists in {dir}."
-                    )
-                    continue
-                else:
-                    get_files.append(file)
-            written_files = []
-            for file in get_files:
-                logger.debug(
-                    f"({self.name}) Writing {file.file_name} to {dir} directory"
-                )
-                written_files.append(
-                    self.session.write_file(file=file, dir=dir, remote=remote)
-                )
-            return written_files
-        elif isinstance(files, FileInfo):
-            if check and self.file_exists(file=files, dir=dir, remote=remote) is True:
-                logger.debug(
-                    f"({self.name}) Skipping {files.file_name}. File already "
-                    f"exists in {dir}."
-                )
-                return None
-            else:
-                logger.debug(
-                    f"({self.name}) Writing {files.file_name} to {dir} directory"
-                )
-                return self.session.write_file(file=files, dir=dir, remote=remote)
+        if check and self.file_exists(file=file, dir=dir, remote=remote) is True:
+            logger.debug(
+                f"({self.name}) Skipping {file.file_name}. File already "
+                f"exists in {dir}."
+            )
+            return None
+        else:
+            logger.debug(f"({self.name}) Writing {file.file_name} to {dir} directory")
+            return self.session.write_file(file=file, dir=dir, remote=remote)

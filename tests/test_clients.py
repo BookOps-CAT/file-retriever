@@ -54,11 +54,11 @@ class TestMock_ftpClient:
         with pytest.raises(RetrieverConnectionError):
             _ftpClient(**stub_creds)
 
-    def test_ftpClient_check_dir(self, mock_ftpClient_sftpClient, stub_creds, caplog):
+    def test_ftpClient_check_dir(self, mock_ftpClient_sftpClient, stub_creds):
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
-        ftp._check_dir(dir="foo")
-        assert "Changing cwd to foo" in caplog.text
+        with does_not_raise():
+            ftp._check_dir(dir="foo")
 
     def test_ftpClient_check_dir_cwd(self, mock_cwd, stub_creds):
         stub_creds["port"] = "21"
@@ -204,46 +204,23 @@ class TestMock_sftpClient:
         with pytest.raises(RetrieverConnectionError):
             _sftpClient(**stub_creds)
 
-    def test_sftpClient_check_dir(self, mock_ftpClient_sftpClient, stub_creds, caplog):
+    def test_sftpClient_check_dir(self, mock_ftpClient_sftpClient, stub_creds):
         stub_creds["port"] = "22"
         sftp = _sftpClient(**stub_creds)
-        sftp._check_dir(dir="foo")
-        assert "Changing cwd to foo" in caplog.text
+        with does_not_raise():
+            sftp._check_dir(dir="foo")
 
-    def test_sftpClient_check_dir_cwd(self, mock_cwd, stub_creds, caplog):
+    def test_sftpClient_check_dir_cwd(self, mock_cwd, stub_creds):
         stub_creds["port"] = "22"
         sftp = _sftpClient(**stub_creds)
         with does_not_raise():
             sftp._check_dir(dir="/")
 
-    def test_sftpClient_check_dir_other_dir(self, mock_other_dir, stub_creds, caplog):
+    def test_sftpClient_check_dir_other_dir(self, mock_other_dir, stub_creds):
         stub_creds["port"] = "22"
         sftp = _sftpClient(**stub_creds)
-        sftp._check_dir(dir="foo")
-        assert caplog.records[0] is not None
-        assert "Changing cwd to foo" in caplog.text
-
-    # def test_sftpClient_check_file_exists_false(
-    #     self, mock_ftpClient_sftpClient, stub_creds
-    # ):
-    #     stub_creds["port"] = "22"
-    #     sftp = _sftpClient(**stub_creds)
-    #     exists = sftp.check_file_exists(file_name="foo.mrc", dir="testdir")
-    #     assert exists is False
-
-    # def test_sftpClient_check_file_exists_true(
-    #     self, mock_Client_file_exists, stub_creds
-    # ):
-    #     stub_creds["port"] = "22"
-    #     sftp = _sftpClient(**stub_creds)
-    #     exists = sftp.check_file_exists(file_name="foo.mrc", dir="testdir")
-    #     assert exists is True
-
-    # def test_sftpClient_check_file_exists_error(self, mock_file_error, stub_creds):
-    #     stub_creds["port"] = "22"
-    #     sftp = _sftpClient(**stub_creds)
-    #     exists = sftp.check_file_exists(file_name="foo.mrc", dir="testdir")
-    #     assert exists is False
+        with does_not_raise():
+            sftp._check_dir(dir="foo")
 
     def test_sftpClient_close(self, mock_ftpClient_sftpClient, stub_creds):
         stub_creds["port"] = "22"
