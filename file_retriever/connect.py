@@ -190,7 +190,7 @@ class Client:
         Returns:
             list of files in `remote_dir` represented as `FileInfo` objects
         """
-        today = datetime.datetime.now()
+        today = datetime.datetime.now(tz=datetime.timezone.utc)
 
         if not remote_dir or remote_dir is None:
             remote_dir = self.remote_dir
