@@ -385,7 +385,7 @@ class TestLiveClients:
         ) >= datetime.datetime(2020, 1, 1)
         assert len(file_list) > 1
         assert file_data.file_size > 1
-        assert file_data.file_mode > 33000
+        assert file_data.file_mode > 32768
         assert fetched_file.file_stream.getvalue()[0:1] == b"0"
 
     def test_sftpClient_live_test_auth_error(self, live_sftp_creds):

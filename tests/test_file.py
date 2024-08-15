@@ -5,13 +5,15 @@ from file_retriever.file import FileInfo, File
 
 
 def test_FileInfo():
-    file = FileInfo(file_name="foo.mrc", file_mtime=1704070800, file_mode="-rw-r--r--")
+    file = FileInfo(
+        file_name="foo.mrc", file_mtime=1704070800, file_mode="-rw-r--r--", file_size=1
+    )
     assert file.file_name == "foo.mrc"
     assert file.file_mtime == 1704070800
     assert file.file_mode == 33188
+    assert file.file_size == 1
     assert file.file_gid is None
     assert file.file_uid is None
-    assert file.file_size is None
     assert file.file_atime is None
     assert isinstance(file.file_name, str)
     assert isinstance(file.file_mtime, int)
@@ -84,7 +86,9 @@ def test_FileInfo_from_stat_data_st_mode_error(mock_sftp_attr):
     ],
 )
 def test_FileInfo_parse_mdtm_time(str_time, mtime):
-    file = FileInfo(file_name="foo.mrc", file_mtime=str_time, file_mode=33188)
+    file = FileInfo(
+        file_name="foo.mrc", file_mtime=str_time, file_mode=33188, file_size=1
+    )
     assert file.file_mtime == mtime
 
 
@@ -108,7 +112,10 @@ def test_FileInfo_parse_mdtm_time(str_time, mtime):
 )
 def test_FileInfo_parse_permissions(str_permissions, decimal_permissions):
     file = FileInfo(
-        file_name="foo.mrc", file_mtime=1704070800, file_mode=str_permissions
+        file_name="foo.mrc",
+        file_mtime=1704070800,
+        file_mode=str_permissions,
+        file_size=1,
     )
     assert file.file_mode == decimal_permissions
 
