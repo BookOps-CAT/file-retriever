@@ -225,11 +225,11 @@ class Client:
                 >= today - time_delta
             ]
             logger.debug(
-                f"({self.name}) {len(recent_files)} recent files in `{remote_dir}`"
+                f"({self.name}) {len(recent_files)} recent file(s) in `{remote_dir}`"
             )
             return recent_files
         else:
-            logger.debug(f"({self.name}) {len(files)} in `{remote_dir}`")
+            logger.debug(f"({self.name}) {len(files)} file(s) in `{remote_dir}`")
             return files
 
     def put_file(
