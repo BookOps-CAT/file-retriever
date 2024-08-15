@@ -1,6 +1,6 @@
-"""Public class for interacting with remote storage. Can be used for to create
-ftp or sftp client.
-
+"""
+This module contains the `Client` class which can be used to create an ftp or
+sftp client to interact with remote storage.
 """
 
 import datetime
@@ -8,7 +8,8 @@ import logging
 import os
 from typing import List, Optional, Union
 from file_retriever._clients import _ftpClient, _sftpClient
-from file_retriever.file import File
+from file_retriever.file import FileInfo, File
+from file_retriever.errors import RetrieverFileError
 
 logger = logging.getLogger("file_retriever")
 
@@ -22,7 +23,7 @@ class Client:
 
     def __init__(
         self,
-        vendor: str,
+        name: str,
         username: str,
         password: str,
         host: str,
@@ -32,26 +33,37 @@ class Client:
         """Initializes client instance.
 
         Args:
-            vendor: name of vendor
-            username: username for server
-            password: password for server
-            host: server address
-            port: port number for server
-            remote_dir: directory on server to interact with
+            name:
+                name of server or vendor (eg. 'leila', 'nsdrop'). primarily
+                used in logging to track client activity.
+            username:
+                username for server
+            password:
+                password for server
+            host:
+                server address
+            port:
+                port number for server. 21 for FTP, 22 for SFTP
+            remote_dir:
+                directory on server to interact with. for most vendor servers
+                there is a default directory to interact with (eg. 'files' or
+                'invoices'). this directory will be used in methods that take
+                `remote_dir` as an arg if another value is not provided.
         """
-
-        self.vendor = vendor
+        self.name = name
         self.host = host
         self.port = port
         self.remote_dir = remote_dir
 
         self.session = self.__connect_to_server(username=username, password=password)
+        logger.info(f"({self.name}) Connected to server")
 
     def __connect_to_server(
         self, username: str, password: str
     ) -> Union[_ftpClient, _sftpClient]:
         match self.port:
             case 21 | "21":
+                logger.info(f"({self.name}) Connecting to {self.host} via FTP client")
                 return _ftpClient(
                     username=username,
                     password=password,
@@ -59,6 +71,7 @@ class Client:
                     port=self.port,
                 )
             case 22 | "22":
+                logger.info(f"({self.name}) Connecting to {self.host} via SFTP client")
                 return _sftpClient(
                     username=username,
                     password=password,
@@ -83,154 +96,180 @@ class Client:
 
         Closes context manager.
         """
-        logger.debug("Closing client session")
+        self.close()
+
+    def close(self):
+        """Closes connection"""
+        logger.info(f"({self.name}) Closing client session")
         self.session.close()
-        logger.debug("Connection closed")
+        logger.info(f"({self.name}) Connection closed")
 
     def check_connection(self) -> bool:
         """Checks if connection to server is active."""
         return self.session.is_active()
 
-    def check_file(self, file: str, check_dir: str, remote: bool) -> bool:
+    def file_exists(self, file: FileInfo, dir: str, remote: bool) -> bool:
         """
-        Check if `file` exists in `check_dir`. If `remote` is True then check will
-        be performed on server, otherwise check will be performed locally.
+        Check if file (represented as `FileInfo` object) exists in `dir`.
+        If `remote` is the directory will be checked on the server connected
+        to via self.session, otherwise the local directory will be checked for
+        the file. Returns True if file with same name and size as `file` exists
+        in `dir`, otherwise False.
 
         Args:
-            file: name of file to check
-            check_dir: directory to check for file
-            remote: whether to check file on server (True) or locally (False)
+            file_name: file to check for as `FileInfo` object
+            dir: directory to check for file
+            remote: whether to check for file on server (True) or locally (False)
 
         Returns:
-            bool indicating if file exists in `check_dir`
+            bool indicating if `file` exists in `dir`
         """
         if remote:
-            remote_file = self.session.get_remote_file_data(file, check_dir)
-            return remote_file.file_name == file
+            try:
+                check_file = self.session.get_file_data(
+                    file_name=file.file_name, dir=dir
+                )
+                return (
+                    check_file.file_name == file.file_name
+                    and check_file.file_size == file.file_size
+                )
+            except RetrieverFileError:
+                return False
         else:
-            return os.path.exists(os.path.join(check_dir, file))
+            return os.path.exists(f"{dir}/{file.file_name}")
 
-    def get_file(
-        self,
-        file: str,
-        remote_dir: Optional[str] = None,
-        local_dir: str = ".",
-        check: bool = True,
-    ) -> File:
+    def get_file(self, file: FileInfo, remote_dir: Optional[str] = None) -> File:
         """
-        Downloads `file` from `remote_dir` on server to `local_dir`. If `remote_dir`
-        is not provided then file will be downloaded from `self.remote_dir`. If
-        `local_dir` is not provided then file will be downloaded to cwd. If `check` is
-        True, then `local_dir` will be checked for file before downloading.
+        Fetches a file from a server.
 
         Args:
-            file: name of file to download
-            remote_dir: directory on server to download file from
-            local_dir: local directory to download file to
-            check: check if file exists in `local_dir` before downloading
+            files: file represented as `FileInfo` object
+            remote_dir: directory on server to fetch file from
 
         Returns:
-            file downloaded to `local_dir` as `File` object
+            file fetched from `remote_dir` as `File` object
         """
         if not remote_dir or remote_dir is None:
-            logger.debug(f"Param `remote_dir` not passed. Using {self.remote_dir}.")
             remote_dir = self.remote_dir
-        if check and self.check_file(file, check_dir=local_dir, remote=False):
-            logger.error(
-                f"{file} not downloaded to {local_dir} because it already exists."
-            )
-            raise FileExistsError
-        self.session.download_file(
-            file=file, remote_dir=remote_dir, local_dir=local_dir
+        logger.debug(f"({self.name}) Fetching {file.file_name} from " f"`{remote_dir}`")
+        return self.session.fetch_file(file=file, dir=remote_dir)
+
+    def get_file_info(
+        self, file_name: str, remote_dir: Optional[str] = None
+    ) -> FileInfo:
+        """
+        Retrieves metadata for a file on server.
+
+        Args:
+            file_name: name of file to retrieve metadata for
+            remote_dir: directory on server to interact with
+
+        Returns:
+            file in `remote_dir` represented as `FileInfo` object
+        """
+        if not remote_dir or remote_dir is None:
+            remote_dir = self.remote_dir
+        logger.debug(
+            f"({self.name}) Retrieving file info for {file_name} " f"from {remote_dir}"
         )
-        logger.debug(f"{file} downloaded to {local_dir} directory")
-        local_file = os.path.normpath(os.path.join(local_dir, file))
-        return File.from_stat_data(os.stat(local_file), file)
+        try:
+            return self.session.get_file_data(file_name=file_name, dir=remote_dir)
+        except RetrieverFileError as e:
+            logger.error(
+                f"({self.name}) Unable to retrieve file data for {file_name}: " f"{e}"
+            )
+            raise e
 
-    def get_file_data(self, file: str, remote_dir: Optional[str] = None) -> File:
+    def list_file_info(
+        self,
+        time_delta: Union[datetime.timedelta, int] = 0,
+        remote_dir: Optional[str] = None,
+    ) -> List[FileInfo]:
         """
-        Retrieve metadata for `file` in `remote_dir` on server. If `remote_dir` is not
-        provided then data for `file` in `self.remote_dir` will be retrieved.
+        Lists each file in a directory on server. If `time_delta`
+        is provided then files created in period since today - time_delta
+        will be listed. time_delta can be an integer representing the number of
+        days or a `datetime.timedelta` object.
 
         Args:
-            file: name of file to retrieve metadata for
-            remote_dir: directory on server to interact with
+            time_delta:
+                how far back to check for files. can be an integer representing
+                the number of days or a `datetime.timedelta` object. default is 0,
+                ie. all files will be listed.
+            remote_dir:
+                directory on server to interact with
 
         Returns:
-            file in `remote_dir` represented as `File` object
+            list of files in `remote_dir` represented as `FileInfo` objects
         """
+        today = datetime.datetime.now(tz=datetime.timezone.utc)
+        if isinstance(time_delta, int):
+            time_delta = datetime.timedelta(days=time_delta)
+        else:
+            time_delta = time_delta
         if not remote_dir or remote_dir is None:
-            logger.debug(f"Param `remote_dir` not passed. Using {self.remote_dir}.")
             remote_dir = self.remote_dir
-        return self.session.get_remote_file_data(file, remote_dir)
-
-    def list_files_in_dir(
-        self, time_delta: int = 0, remote_dir: Optional[str] = None
-    ) -> List[File]:
-        """
-        Lists each file in `remote_dir` directory on server. If `remote_dir` is not
-        provided then files in `self.remote_dir` will be listed. If `time_delta`
-        is provided then files created in the last x days will be listed where x
-        is the `time_delta`.
-
-        Args:
-            time_delta: number of days to go back in time to list files
-            remote_dir: directory on server to interact with
-
-        Returns:
-            list of files in `remote_dir` represented as `File` objects
-        """
-        today = datetime.datetime.now()
-
-        if not remote_dir or remote_dir is None:
-            logger.debug(f"Param `remote_dir` not passed. Using {self.remote_dir}.")
-            remote_dir = self.remote_dir
-        files = self.session.list_remote_file_data(remote_dir)
-        if time_delta > 0:
-            logger.debug(f"Checking for files modified in last {time_delta} days.")
-            return [
+        logger.debug(f"({self.name}) Retrieving list of files in `{remote_dir}`")
+        files = self.session.list_file_data(dir=remote_dir)
+        if time_delta > datetime.timedelta(days=0):
+            logger.debug(
+                f"({self.name}) Filtering list for files created "
+                f"since {datetime.datetime.strftime((today - time_delta), '%Y-%m-%d')}"
+            )
+            recent_files = [
                 i
                 for i in files
                 if datetime.datetime.fromtimestamp(
                     i.file_mtime, tz=datetime.timezone.utc
                 )
-                >= today - datetime.timedelta(days=time_delta)
+                >= today - time_delta
             ]
+            logger.debug(
+                f"({self.name}) {len(recent_files)} recent files in `{remote_dir}`"
+            )
+            return recent_files
         else:
+            logger.debug(f"({self.name}) {len(files)} in `{remote_dir}`")
             return files
 
     def put_file(
         self,
-        file: str,
-        local_dir: str = ".",
-        remote_dir: Optional[str] = None,
-        check: bool = True,
-    ) -> File:
+        file: File,
+        dir: str,
+        remote: bool,
+        check: bool,
+    ) -> Optional[FileInfo]:
         """
-        Uploads file from local directory to server. If `remote_dir` is not
-        provided then file will be uploaded to `self.remote_dir`. If `local_dir`
-        is not provided then file will be uploaded from cwd. If `check` is
-        True, then `remote_dir` will be checked for file before downloading.
+        Writes file to directory.
 
         Args:
-            file: name of file to upload
-            local_dir: local directory to upload file from
-            remote_dir: remote directory to upload file to
-            check: check if file exists in `remote_dir` before uploading
+            file:
+                file as `File` object
+            dir:
+                directory to write file to
+            remote:
+                bool indicating if file should be written to remote or local storage.
+
+                If True, then file is written to `dir` on server.
+                If False, then file is written to local `dir` directory.
+            check:
+                bool indicating if directory should be checked before writing file.
+
+                If True, then `dir` will be checked for files matching the file_name
+                and file_size of `file` before writing to `dir`. If a match is found
+                then `file` will not be written.
 
         Returns:
-            file uploaded to `remote_dir` as `File` object
+            `FileInfo` objects representing written file
         """
-        if remote_dir is None:
-            logger.debug(f"Param `remote_dir` not passed. Using {self.remote_dir}.")
-            remote_dir = self.remote_dir
-        if check and self.check_file(file, check_dir=remote_dir, remote=True):
-            logger.error(
-                f"{file} not uploaded to {remote_dir} because it already exists"
+        if check:
+            logger.debug(f"({self.name}) Checking for file in `{dir}` before writing")
+        if check and self.file_exists(file=file, dir=dir, remote=remote) is True:
+            logger.debug(
+                f"({self.name}) Skipping {file.file_name}. File already "
+                f"exists in `{dir}`."
             )
-            raise FileExistsError
-        uploaded_file = self.session.upload_file(
-            file=file, remote_dir=remote_dir, local_dir=local_dir
-        )
-        logger.debug(f"{file} uploaded from {local_dir} to {remote_dir} directory")
-        return uploaded_file
+            return None
+        else:
+            logger.debug(f"({self.name}) Writing {file.file_name} to `{dir}`")
+            return self.session.write_file(file=file, dir=dir, remote=remote)
