@@ -13,6 +13,24 @@ from file_retriever.file import FileInfo
 logger = logging.getLogger("file_retriever")
 
 
+@pytest.fixture
+def mock_config_yaml() -> str:
+    vendor_list = []
+    vendors = ["FOO", "BAR", "BAZ", "NSDROP"]
+    for vendor in vendors:
+        string = (
+            f"{vendor}_HOST: ftp.{vendor.lower()}.com\n"
+            f"{vendor}_USER: {vendor.lower()}\n"
+            f"{vendor}_PASSWORD: bar\n"
+            f"{vendor}_PORT: '21'\n"
+            f"{vendor}_SRC: {vendor.lower()}_src\n"
+            f"{vendor}_DST: {vendor.lower()}_dst\n"
+        )
+        vendor_list.append(string)
+    yaml_string = "\n".join(vendor_list)
+    return yaml_string
+
+
 class FakeUtcNow(datetime.datetime):
     @classmethod
     def now(cls, tz=datetime.timezone.utc):

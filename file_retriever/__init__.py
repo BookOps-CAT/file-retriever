@@ -4,9 +4,12 @@ import os
 import click
 from file_retriever.utils import client_config, logger_config, get_recent_files
 
+logger = logging.getLogger("file_retriever")
 
-@click.group
-def file_retriever_cli():
+
+@click.group()
+@click.pass_context
+def file_retriever_cli(ctx: click.Context) -> None:
     """
     Click command group for interacting with remote servers. Loggers are
     configured when the command group is called. The `client_config` function
@@ -16,14 +19,24 @@ def file_retriever_cli():
     This list of names is stored in a `click.Context.obj` that can be passed to
     any other commands.
     """
-    logging.getLogger("file_retriever")
     config = logger_config()
     logging.config.dictConfig(config)
+    ctx.obj = client_config(
+        os.path.join(os.environ["USERPROFILE"], ".cred/.sftp/connections.yaml")
+    )
     pass
 
 
 @file_retriever_cli.command(
     "get-vendor-files", short_help="Retrieve files from remote server."
+)
+@click.option(
+    "--vendor",
+    "-v",
+    "vendor",
+    type=str,
+    multiple=True,
+    help="Vendor to retrieve files for.",
 )
 @click.option(
     "--days",
@@ -49,18 +62,19 @@ def file_retriever_cli():
     type=int,
     help="How many minutes back to retrieve files.",
 )
-def get_files(days: int, hours: int, minutes: int) -> None:
+@click.pass_context
+def get_files(
+    ctx: click.Context, vendor: str, days: int, hours: int, minutes: int
+) -> None:
     """
     Retrieve files from remote server for specified vendor(s).
 
     Args:
-        # all_vendors:
-        #     if True, retrieve files for all vendors listed in config file.
-        # vendor:
-        #     name of vendor to retrieve files from. if 'all' then all vendors
-        #     listed in config file will be included, otherwise multiple values
-        #     can be passed and each will be added to a list. files will be
-        #     retrieved for each vendor in the list
+        vendor:
+            name of vendor to retrieve files from. if 'all' then all vendors
+            listed in config file will be included, otherwise multiple values
+            can be passed and each will be added to a list. files will be
+            retrieved for each vendor in the list
         days:
             number of days to go back and retrieve files from
         hours:
@@ -69,11 +83,29 @@ def get_files(days: int, hours: int, minutes: int) -> None:
             number of minutes to go back and retrieve files from
 
     """
-    config_vendors = client_config(
-        os.path.join(os.environ["USERPROFILE"], ".cred/.sftp/connections.yaml")
-    )
-    vendor_list = [i.upper() for i in config_vendors if i != "NSDROP"]
+    if "all" in vendor and isinstance(ctx.obj, list):
+        vendor_list = [i.upper() for i in ctx.obj if i != "NSDROP"]
+    else:
+        vendor_list = [i.upper() for i in vendor]
     get_recent_files(vendors=vendor_list, days=days, hours=hours, minutes=minutes)
+
+
+@file_retriever_cli.command(
+    "available-vendors", short_help="List all configured vendors."
+)
+@click.pass_context
+def list_config_vendors(ctx: click.Context) -> None:
+    """
+    List all configured vendors.
+
+    Args:
+        ctx: click context object that contains a list of vendor names
+
+    """
+    if isinstance(ctx.obj, list) and len(ctx.obj) > 0:
+        click.echo(f"Available vendors: {ctx.obj}")
+    else:
+        click.echo("No vendors available.")
 
 
 def main():
