@@ -15,24 +15,24 @@ Retrieves files from one or more vendor servers via FTP/SFTP
 
 Options:
 
-    `-v, --vendor`:
-        
-        The vendor whose server you would like to connect to and retrieve files from.
-        Use `-v all` to retrieve files from all configured vendors.
-        This option can be repeated: 
-            eg. `$ fetch vendor-files -v eastview -v leila`
+`-v, --vendor`:
     
-    `-d, --days`: 
-        
-        The number of days to go back to search for files
+    The vendor whose server you would like to connect to and retrieve files from.
+    Use `-v all` to retrieve files from all configured vendors.
+    This option can be repeated: 
+        eg. `$ fetch vendor-files -v eastview -v leila`
+
+`-d, --days`: 
     
-    `-h, --hours`:
-        
-        The number of hours to go back to search for files
+    The number of days to go back to search for files
+
+`-h, --hours`:
     
-    `-m, --minutes`
-        
-        The number of minutes to go back to search for files
+    The number of hours to go back to search for files
+
+`-m, --minutes`
+    
+    The number of minutes to go back to search for files
 
 ##### Get Daily Vendor Files
 Retrieves files updated within last day from servers of all configured vendors 
