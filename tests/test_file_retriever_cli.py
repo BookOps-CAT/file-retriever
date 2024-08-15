@@ -16,7 +16,7 @@ def test_file_retriever_cli_get_files(mock_Client, mocker, caplog, mock_config_y
     runner = CliRunner()
     runner.invoke(
         cli=file_retriever_cli,
-        args=["get-vendor-files", "-v", "all"],
+        args=["vendor-files", "-v", "all"],
     )
     assert os.environ["FOO_HOST"] == "ftp.foo.com"
     assert os.environ["NSDROP_HOST"] == "ftp.nsdrop.com"
@@ -34,7 +34,7 @@ def test_file_retriever_cli_get_files_multiple_vendors(
     runner = CliRunner()
     runner.invoke(
         cli=file_retriever_cli,
-        args=["get-vendor-files", "-v", "foo", "-v", "bar", "-v", "baz"],
+        args=["vendor-files", "-v", "foo", "-v", "bar", "-v", "baz"],
     )
     assert os.environ["FOO_HOST"] == "ftp.foo.com"
     assert os.environ["BAR_HOST"] == "ftp.bar.com"

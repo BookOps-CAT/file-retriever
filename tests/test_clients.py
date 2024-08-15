@@ -403,7 +403,7 @@ class TestLiveClients:
             _sftpClient(**live_sftp_creds)
 
     def test_sftpClient_NSDROP(self, NSDROP_creds):
-        remote_dir = "NSDROP/file_retriever_test/test_vendor"
+        remote_dir = "NSDROP/TEST/vendor_records"
         del NSDROP_creds["remote_dir"], NSDROP_creds["name"]
         live_sftp = _sftpClient(**NSDROP_creds)
         get_file = live_sftp.get_file_data(file_name="test.txt", dir=remote_dir)

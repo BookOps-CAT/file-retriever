@@ -11,13 +11,14 @@ logger = logging.getLogger("file_retriever")
 @click.pass_context
 def file_retriever_cli(ctx: click.Context) -> None:
     """
-    Click command group for interacting with remote servers. Loggers are
-    configured when the command group is called. The `client_config` function
-    is used to read a configuration file with credentials and set the creds as
-    environment variables. `client_config` returns a list of names for servers
-    whose credentials are stored in the configuration file and loaded to env vars.
-    This list of names is stored in a `click.Context.obj` that can be passed to
-    any other commands.
+    CLI for interacting with remote servers.
+
+    Loggers are configured when the command group is called. The `client_config`
+    function is used to read a configuration file with credentials and set the
+    creds as environment variables. `client_config` returns a list of names for
+    servers whose credentials are stored in the configuration file and loaded
+    to env vars. This list of names is stored in a `click.Context.obj` that can
+    be passed to any other commands.
     """
     config = logger_config()
     logging.config.dictConfig(config)
@@ -28,7 +29,7 @@ def file_retriever_cli(ctx: click.Context) -> None:
 
 
 @file_retriever_cli.command(
-    "get-vendor-files", short_help="Retrieve files from remote server."
+    "vendor-files", short_help="Retrieve files from remote server."
 )
 @click.option(
     "--vendor",
