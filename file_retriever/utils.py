@@ -76,11 +76,8 @@ def get_recent_files(
 
     """
     nsdrop_client = connect("nsdrop")
-    logger.debug(f"Vendors: {vendors}")
     timedelta = datetime.timedelta(days=days, hours=hours, minutes=minutes)
-    logger.debug(f"Time delta: {timedelta}")
     for vendor in vendors:
-        logger.debug(f"Connecting to {vendor}")
         with connect(vendor) as client:
             file_list = [
                 i
@@ -90,7 +87,7 @@ def get_recent_files(
                 )
             ]
             if len(file_list) == 0:
-                break
+                continue
             for file in file_list:
                 fetched_file = client.get_file(
                     file=file, remote_dir=os.environ[f"{vendor.upper()}_SRC"]

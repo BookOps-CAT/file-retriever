@@ -92,6 +92,23 @@ def get_files(
 
 
 @file_retriever_cli.command(
+    "daily-vendor-files", short_help="Retrieve previous day's files from remote server."
+)
+@click.pass_context
+def get_files_today(ctx: click.Context) -> None:
+    """
+    Retrieve files updated within last day from remote server for all vendor(s).
+
+    Args:
+        ctx: click context object that contains a list of vendor names
+
+    """
+    vendor_list = [i.upper() for i in ctx.obj if i != "NSDROP"]
+    click.echo(vendor_list)
+    get_recent_files(vendors=vendor_list, days=1)
+
+
+@file_retriever_cli.command(
     "available-vendors", short_help="List all configured vendors."
 )
 @click.pass_context
