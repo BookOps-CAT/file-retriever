@@ -1,6 +1,6 @@
-"""Public class for interacting with remote storage. Can be used for to create
-ftp or sftp client.
-
+"""
+This module contains the `Client` class which can be used to create an ftp or
+sftp client to interact with remote storage.
 """
 
 import datetime
@@ -33,12 +33,22 @@ class Client:
         """Initializes client instance.
 
         Args:
-            name: name of server or vendor (eg. 'leila', 'nsdrop')
-            username: username for server
-            password: password for server
-            host: server address
-            port: port number for server
-            remote_dir: directory on server to interact with
+            name:
+                name of server or vendor (eg. 'leila', 'nsdrop'). primarily
+                used in logging to track client activity.
+            username:
+                username for server
+            password:
+                password for server
+            host:
+                server address
+            port:
+                port number for server. 21 for FTP, 22 for SFTP
+            remote_dir:
+                directory on server to interact with. for most vendor servers
+                there is a default directory to interact with (eg. 'files' or
+                'invoices'). this directory will be used in methods that take
+                `remote_dir` as an arg if another value is not provided.
         """
         self.name = name
         self.host = host
@@ -100,17 +110,19 @@ class Client:
 
     def file_exists(self, file: FileInfo, dir: str, remote: bool) -> bool:
         """
-        Check if file with the name `file_name` exists in `dir`. If `remote`
-        is True then check will be performed on server, otherwise check will
-        be performed locally.
+        Check if file (represented as `FileInfo` object) exists in `dir`.
+        If `remote` is the directory will be checked on the server connected
+        to via self.session, otherwise the local directory will be checked for
+        the file. Returns True if file with same name and size as `file` exists
+        in `dir`, otherwise False.
 
         Args:
-            file_name: name of file to check
+            file_name: file to check for as `FileInfo` object
             dir: directory to check for file
-            remote: whether to check file on server (True) or locally (False)
+            remote: whether to check for file on server (True) or locally (False)
 
         Returns:
-            bool indicating if file exists in `dir`
+            bool indicating if `file` exists in `dir`
         """
         if remote:
             try:
@@ -128,18 +140,14 @@ class Client:
 
     def get_file(self, file: FileInfo, remote_dir: Optional[str] = None) -> File:
         """
-        Fetches one or more files from `remote_dir` on server. If `remote_dir` is
-        not provided then file will be fetched from `self.remote_dir`.
+        Fetches a file from a server.
 
         Args:
-            files:
-                single file as `FileInfo` object or multipel files as list of
-                `FileInfo` objects
-            remote_dir:
-                directory on server to fetch file from
+            files: file represented as `FileInfo` object
+            remote_dir: directory on server to fetch file from
 
         Returns:
-            file(s) fetched from `remote_dir` as `File` object(s)
+            file fetched from `remote_dir` as `File` object
         """
         if not remote_dir or remote_dir is None:
             remote_dir = self.remote_dir
@@ -150,8 +158,7 @@ class Client:
         self, file_name: str, remote_dir: Optional[str] = None
     ) -> FileInfo:
         """
-        Retrieve metadata for `file` in `remote_dir` on server. If `remote_dir` is not
-        provided then data for `file` in `self.remote_dir` will be retrieved.
+        Retrieves metadata for a file on server.
 
         Args:
             file_name: name of file to retrieve metadata for
@@ -179,15 +186,16 @@ class Client:
         remote_dir: Optional[str] = None,
     ) -> List[FileInfo]:
         """
-        Lists each file in `remote_dir` directory on server. If `remote_dir` is not
-        provided then files in `self.remote_dir` will be listed. If `time_delta`
-        is provided then files created in the last x days will be listed where x
-        is the `time_delta`.
+        Lists each file in a directory on server. If `time_delta`
+        is provided then files created in period since today - time_delta
+        will be listed. time_delta can be an integer representing the number of
+        days or a `datetime.timedelta` object.
 
         Args:
             time_delta:
                 how far back to check for files. can be an integer representing
-                the number of days or a `datetime.timedelta` object
+                the number of days or a `datetime.timedelta` object. default is 0,
+                ie. all files will be listed.
             remote_dir:
                 directory on server to interact with
 
@@ -205,10 +213,10 @@ class Client:
         files = self.session.list_file_data(dir=remote_dir)
         if time_delta > datetime.timedelta(days=0):
             logger.debug(
-                f"({self.name}) Filtering list for files created in "
-                f"the last {time_delta} days"
+                f"({self.name}) Filtering list for files created "
+                f"since {today - time_delta}"
             )
-            file_list = [
+            recent_files = [
                 i
                 for i in files
                 if datetime.datetime.fromtimestamp(
@@ -217,9 +225,9 @@ class Client:
                 >= today - time_delta
             ]
             logger.debug(
-                f"({self.name}) {len(file_list)} recent files in `{remote_dir}`"
+                f"({self.name}) {len(recent_files)} recent files in `{remote_dir}`"
             )
-            return file_list
+            return recent_files
         else:
             logger.debug(f"({self.name}) {len(files)} in `{remote_dir}`")
             return files
@@ -232,30 +240,27 @@ class Client:
         check: bool,
     ) -> Optional[FileInfo]:
         """
-        Writes fetched file(s) to directory. Takes one or more `File` objects and
-        writes them to `dir` directory. If `remote` is True, then file is written
-        to `dir` on the Client server. If `remote` is False, then file is written
-        to the local directory `dir`. If `check` True is then `dir` will be checked
-        for an existing file with the same name for before writing the file. If an
-        existing file is found then the file will not be written.
+        Writes file to directory.
 
         Args:
-            files:
-                one or more files as `File` objects
+            file:
+                file as `File` object
             dir:
-                directory to write file(s) to
+                directory to write file to
             remote:
-                bool indicating if file(s) should be written to remote or local
-                directory
+                bool indicating if file should be written to remote or local storage.
+
+                If True, then file is written to `dir` on server.
+                If False, then file is written to local `dir` directory.
             check:
-                bool indicating if directory should be checked before writing file(s)
+                bool indicating if directory should be checked before writing file.
+
+                If True, then `dir` will be checked for files matching the file_name
+                and file_size of `file` before writing to `dir`. If a match is found
+                then `file` will not be written.
 
         Returns:
-            one or more `FileInfo` objects representing written file(s)
-
-        Raises:
-            ftplib.error_perm: if unable to write file to directory
-            OSError: if unable to write file to directory
+            `FileInfo` objects representing written file
         """
         if check:
             logger.debug(f"({self.name}) Checking for file in `{dir}` before writing")
