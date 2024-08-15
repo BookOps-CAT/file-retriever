@@ -211,9 +211,7 @@ class _ftpClient(_BaseClient):
                 file_mtime=time[4:],
                 file_mode=permissions,
             )
-        except ftplib.error_perm as e:
-            # remove logging?
-            logger.error(f"Unable to retrieve file data for {file_name}: {e}")
+        except ftplib.error_perm:
             raise RetrieverFileError
 
     def list_file_data(self, dir: str) -> List[FileInfo]:
@@ -432,9 +430,7 @@ class _sftpClient(_BaseClient):
             return FileInfo.from_stat_data(
                 data=self.connection.stat(file_name), file_name=file_name
             )
-        except OSError as e:
-            # remove logging?
-            logger.error(f"Unable to retrieve file data for {file_name}: {e}")
+        except OSError:
             raise RetrieverFileError
 
     def list_file_data(self, dir: str) -> List[FileInfo]:

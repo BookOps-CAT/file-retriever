@@ -6,7 +6,20 @@ import yaml
 
 
 def logger_config() -> dict:
-    """Create and return dict for logger configuration"""
+    """
+    Create and return dict for logger configuration.
+
+    INFO and DEBUG logs are recorded in methods of the `Client` class while
+    ERROR logs are primarily recorded in methods of the `_ftpClient` and
+    `_sftpClient` classes. The one exception to this is ERROR messages
+    logged by the `_ftpClient` and `_sftpClient` `get_file_data` methods.
+    These are logged as errors in the `Client` class in order avoid logging
+    errors when files are not found by the `Client.file_exists` method.
+
+    Returns:
+        dict: dictionary with logger configuration
+
+    """
     log_config_dict = {
         "version": 1,
         "formatters": {

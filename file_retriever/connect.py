@@ -209,12 +209,12 @@ class Client:
             time_delta = time_delta
         if not remote_dir or remote_dir is None:
             remote_dir = self.remote_dir
-        logger.debug(f"({self.name}) Listing all files in `{remote_dir}`")
+        logger.debug(f"({self.name}) Retrieving list of files in `{remote_dir}`")
         files = self.session.list_file_data(dir=remote_dir)
         if time_delta > datetime.timedelta(days=0):
             logger.debug(
                 f"({self.name}) Filtering list for files created "
-                f"since {today - time_delta}"
+                f"since {datetime.datetime.strftime((today - time_delta), '%Y-%m-%d')}"
             )
             recent_files = [
                 i
