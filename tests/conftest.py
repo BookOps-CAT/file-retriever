@@ -267,20 +267,31 @@ def mock_file_error(monkeypatch, mock_open_file, mock_ftpClient_sftpClient):
     def mock_ftp_error_perm(*args, **kwargs):
         raise ftplib.error_perm
 
-    def mock_retrlines(*args, **kwargs):
+    def mock_none_return(*args, **kwargs):
         return None
 
-    monkeypatch.setattr(MockFTP, "voidcmd", mock_ftp_error_perm)
-    monkeypatch.setattr(MockFTP, "size", mock_ftp_error_perm)
-    monkeypatch.setattr(MockFTP, "nlst", mock_ftp_error_perm)
-    monkeypatch.setattr(MockFTP, "retrlines", mock_retrlines)
-    monkeypatch.setattr(MockFTP, "retrbinary", mock_ftp_error_perm)
-    monkeypatch.setattr(MockFTP, "storbinary", mock_ftp_error_perm)
     monkeypatch.setattr(MockSFTPClient, "stat", mock_os_error)
     monkeypatch.setattr(MockSFTPClient, "getfo", mock_os_error)
     monkeypatch.setattr(MockSFTPClient, "putfo", mock_os_error)
     monkeypatch.setattr(MockSFTPClient, "listdir_attr", mock_os_error)
     monkeypatch.setattr(os, "stat", mock_os_error)
+    monkeypatch.setattr(MockFTP, "voidcmd", mock_ftp_error_perm)
+    monkeypatch.setattr(MockFTP, "nlst", mock_ftp_error_perm)
+    monkeypatch.setattr(MockFTP, "retrbinary", mock_ftp_error_perm)
+    monkeypatch.setattr(MockFTP, "storbinary", mock_ftp_error_perm)
+    monkeypatch.setattr(MockFTP, "size", mock_ftp_error_perm)
+    monkeypatch.setattr(MockFTP, "retrlines", mock_none_return)
+
+
+@pytest.fixture
+def mock_ftp_file_not_found(monkeypatch, mock_open_file, mock_ftpClient_sftpClient):
+    def mock_none_return(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(MockFTP, "voidcmd", mock_none_return)
+    monkeypatch.setattr(MockFTP, "nlst", mock_none_return)
+    monkeypatch.setattr(MockFTP, "size", mock_none_return)
+    monkeypatch.setattr(MockFTP, "retrlines", mock_none_return)
 
 
 @pytest.fixture

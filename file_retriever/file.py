@@ -102,14 +102,6 @@ class FileInfo:
 
         if hasattr(data, "st_size") and data.st_size is not None:
             st_size = data.st_size
-        elif isinstance(data, paramiko.SFTPAttributes) and (
-            hasattr(data, "longname")
-            and data.longname is not None
-            and data.st_size is None
-        ):
-            raise AttributeError(
-                "No file size provided, size may be present in longname"
-            )
         else:
             raise AttributeError("No file size provided")
 

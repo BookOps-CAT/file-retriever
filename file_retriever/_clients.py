@@ -198,23 +198,12 @@ class _ftpClient(_BaseClient):
                 permissions = data[0:10]
 
             self.connection.retrlines(f"LIST {file_name}", get_file_permissions),
-            if permissions is None:
-                logger.error(f"{file_name} not found on server.")
-                raise RetrieverFileError("File not found on server.")
-
-            # Retrieve file size
             size = self.connection.size(file_name)
-            if size is None:
-                logger.error(f"Unable to retrieve file size for {file_name}.")
-                raise RetrieverFileError("Unable to retrieve file size.")
-
-            # Retrieve file modification time
             time = self.connection.voidcmd(f"MDTM {file_name}")
-            if time is None:
-                logger.error(
-                    f"Unable to retrieve file modification time for {file_name}."
-                )
-                raise RetrieverFileError("Unable to retrieve file modification time.")
+
+            if permissions is None or size is None or time is None:
+                logger.error(f"Unable to retrieve file data for {file_name}.")
+                raise RetrieverFileError
 
             return FileInfo(
                 file_name=file_name,

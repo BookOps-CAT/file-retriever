@@ -44,7 +44,7 @@ def test_FileInfo_from_stat_data(mock_sftp_attr):
     assert baz.file_mode == 33279
 
 
-def test_FileInfo_from_stat_data_no_filename(mock_sftp_attr):
+def test_FileInfo_from_stat_data_no_file_name(mock_sftp_attr):
     sftp_attr = mock_sftp_attr
     sftp_attr.filename = None
     with pytest.raises(AttributeError) as exc:
@@ -52,7 +52,15 @@ def test_FileInfo_from_stat_data_no_filename(mock_sftp_attr):
     assert "No filename provided" in str(exc)
 
 
-def test_FileInfo_from_stat_data_st_mtime_error(mock_sftp_attr):
+def test_FileInfo_from_stat_data_no_file_size(mock_sftp_attr):
+    sftp_attr = mock_sftp_attr
+    sftp_attr.st_size = None
+    with pytest.raises(AttributeError) as exc:
+        FileInfo.from_stat_data(data=sftp_attr)
+    assert "No file size provided" in str(exc)
+
+
+def test_FileInfo_from_stat_data_no_file_mtime(mock_sftp_attr):
     sftp_attr = mock_sftp_attr
     delattr(sftp_attr, "st_mtime")
     with pytest.raises(AttributeError) as exc:
@@ -60,7 +68,7 @@ def test_FileInfo_from_stat_data_st_mtime_error(mock_sftp_attr):
     assert "No file modification time provided" in str(exc)
 
 
-def test_FileInfo_from_stat_data_st_mode_error(mock_sftp_attr):
+def test_FileInfo_from_stat_data_no_file_mode(mock_sftp_attr):
     sftp_attr = mock_sftp_attr
     sftp_attr.st_mode = None
     with pytest.raises(AttributeError) as exc:

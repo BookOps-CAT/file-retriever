@@ -106,6 +106,14 @@ class TestMock_ftpClient:
         with pytest.raises(RetrieverFileError):
             ftp.get_file_data(file_name="foo.mrc", dir="testdir")
 
+    def test_ftpClient_get_file_data_file_not_found(
+        self, mock_ftp_file_not_found, stub_creds
+    ):
+        stub_creds["port"] = "21"
+        ftp = _ftpClient(**stub_creds)
+        with pytest.raises(RetrieverFileError):
+            ftp.get_file_data(file_name="foo.mrc", dir="testdir")
+
     def test_ftpClient_list_file_data(self, mock_ftpClient_sftpClient, stub_creds):
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
