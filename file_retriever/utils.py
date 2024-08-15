@@ -1,10 +1,12 @@
+"""This module contains helper functions for the file_retriever package."""
+
 import os
 from typing import List
 import yaml
 
 
 def logger_config() -> dict:
-    """Create dict for logger configuration"""
+    """Create and return dict for logger configuration"""
     log_config_dict = {
         "version": 1,
         "formatters": {
@@ -33,16 +35,16 @@ def logger_config() -> dict:
 
 def client_config(config_path: str) -> List[str]:
     """
-    Set environment variables from config file. Returns a list of vendors
-    whose credentials are stored in the config file and have been added to
-    the environment.
+    Read config file with credentials and set creds as environment variables.
+    Returns a list of names for servers whose credentials are stored in the
+    config file and have been added to env vars.
 
     Args:
-        config_path (str): Path to the config file.
+        config_path (str): Path to the yaml file with credendtials.
 
     Returns:
-        list of vendors whose credentials are stored in the config file and
-        have been added to the environment.
+        list of names of servers (eg. EASTVIEW, NSDROP) whose credentials are
+        stored in the config file and have been added to env vars
     """
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
