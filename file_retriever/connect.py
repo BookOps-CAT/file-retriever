@@ -28,7 +28,6 @@ class Client:
         password: str,
         host: str,
         port: Union[str, int],
-        remote_dir: str,
     ):
         """Initializes client instance.
 
@@ -44,16 +43,10 @@ class Client:
                 server address
             port:
                 port number for server. 21 for FTP, 22 for SFTP
-            remote_dir:
-                directory on server to interact with. for most vendor servers
-                there is a default directory to interact with (eg. 'files' or
-                'invoices'). this directory will be used in methods that take
-                `remote_dir` as an arg if another value is not provided.
         """
         self.name = name
         self.host = host
         self.port = port
-        self.remote_dir = remote_dir
 
         self.session = self.__connect_to_server(username=username, password=password)
         logger.info(f"({self.name}) Connected to server")
@@ -138,7 +131,7 @@ class Client:
         else:
             return os.path.exists(f"{dir}/{file.file_name}")
 
-    def get_file(self, file: FileInfo, remote_dir: Optional[str] = None) -> File:
+    def get_file(self, file: FileInfo, remote_dir: str) -> File:
         """
         Fetches a file from a server.
 
@@ -149,14 +142,10 @@ class Client:
         Returns:
             file fetched from `remote_dir` as `File` object
         """
-        if not remote_dir or remote_dir is None:
-            remote_dir = self.remote_dir
         logger.debug(f"({self.name}) Fetching {file.file_name} from " f"`{remote_dir}`")
         return self.session.fetch_file(file=file, dir=remote_dir)
 
-    def get_file_info(
-        self, file_name: str, remote_dir: Optional[str] = None
-    ) -> FileInfo:
+    def get_file_info(self, file_name: str, remote_dir: str) -> FileInfo:
         """
         Retrieves metadata for a file on server.
 
@@ -167,8 +156,6 @@ class Client:
         Returns:
             file in `remote_dir` represented as `FileInfo` object
         """
-        if not remote_dir or remote_dir is None:
-            remote_dir = self.remote_dir
         logger.debug(
             f"({self.name}) Retrieving file info for {file_name} " f"from {remote_dir}"
         )
@@ -182,8 +169,8 @@ class Client:
 
     def list_file_info(
         self,
-        time_delta: Union[datetime.timedelta, int] = 0,
-        remote_dir: Optional[str] = None,
+        remote_dir: str,
+        time_delta: Optional[Union[datetime.timedelta, int]] = None,
     ) -> List[FileInfo]:
         """
         Lists each file in a directory on server. If `time_delta`
@@ -192,12 +179,12 @@ class Client:
         days or a `datetime.timedelta` object.
 
         Args:
-            time_delta:
-                how far back to check for files. can be an integer representing
-                the number of days or a `datetime.timedelta` object. default is 0,
-                ie. all files will be listed.
             remote_dir:
                 directory on server to interact with
+            time_delta:
+                how far back to check for files. can be an integer representing
+                the number of days or a `datetime.timedelta` object. default is None,
+                ie. all files will be listed.
 
         Returns:
             list of files in `remote_dir` represented as `FileInfo` objects
@@ -207,11 +194,9 @@ class Client:
             time_delta = datetime.timedelta(days=time_delta)
         else:
             time_delta = time_delta
-        if not remote_dir or remote_dir is None:
-            remote_dir = self.remote_dir
         logger.debug(f"({self.name}) Retrieving list of files in `{remote_dir}`")
         files = self.session.list_file_data(dir=remote_dir)
-        if time_delta > datetime.timedelta(days=0):
+        if time_delta and time_delta is not None:
             logger.debug(
                 f"({self.name}) Filtering list for files created "
                 f"since {datetime.datetime.strftime((today - time_delta), '%Y-%m-%d')}"
