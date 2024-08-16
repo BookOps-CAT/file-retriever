@@ -3,7 +3,62 @@ import logging
 import logging.config
 import os
 import pytest
-from file_retriever.utils import logger_config, client_config
+from file_retriever.connect import Client
+from file_retriever.utils import logger_config, client_config, connect, get_recent_files
+
+
+def test_connect(mock_Client, mocker):
+    yaml_string = """
+        FOO_HOST: ftp.testvendor.com
+        FOO_USER: bar
+        FOO_PASSWORD: baz
+        FOO_PORT: '21'
+        FOO_SRC: foo_src
+        FOO_DST: foo_dst
+    """
+    m = mocker.mock_open(read_data=yaml_string)
+    mocker.patch("builtins.open", m)
+
+    client_config("foo.yaml")
+    client = connect("foo")
+    assert client.name == "FOO"
+    assert client.host == "ftp.testvendor.com"
+    assert client.port == "21"
+    assert client.remote_dir == "foo_src"
+    assert isinstance(client, Client)
+    assert client.session is not None
+
+
+def test_get_recent_files(mock_Client, caplog):
+    (
+        os.environ["NSDROP_HOST"],
+        os.environ["NSDROP_USER"],
+        os.environ["NSDROP_PASSWORD"],
+        os.environ["NSDROP_PORT"],
+        os.environ["NSDROP_SRC"],
+    ) = ("sftp.foo.com", "foo", "bar", "22", "foo_src")
+    vendors = ["foo"]
+    get_recent_files(vendors=vendors, days=300)
+    assert "(NSDROP) Connecting to sftp.foo.com" in caplog.text
+    assert "(FOO) Connected to server" in caplog.text
+    assert "(FOO) Retrieving list of files in " in caplog.text
+    assert "(FOO) Closing client session" in caplog.text
+
+
+def test_get_recent_files_no_files(mock_Client, caplog):
+    (
+        os.environ["NSDROP_HOST"],
+        os.environ["NSDROP_USER"],
+        os.environ["NSDROP_PASSWORD"],
+        os.environ["NSDROP_PORT"],
+        os.environ["NSDROP_SRC"],
+    ) = ("sftp.foo.com", "foo", "bar", "22", "foo_src")
+    vendors = ["foo"]
+    get_recent_files(vendors=vendors, days=1, hours=1, minutes=1)
+    assert "(NSDROP) Connecting to sftp.foo.com" in caplog.text
+    assert "(FOO) Connected to server" in caplog.text
+    assert "(FOO) Retrieving list of files in " in caplog.text
+    assert "(FOO) Closing client session" in caplog.text
 
 
 def test_logger_config():
