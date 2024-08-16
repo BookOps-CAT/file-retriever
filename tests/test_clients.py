@@ -1,21 +1,15 @@
 from contextlib import nullcontext as does_not_raise
 import datetime
 import io
-import logging
-import logging.config
+import os
 import pytest
 from file_retriever._clients import _ftpClient, _sftpClient, _BaseClient
 from file_retriever.file import FileInfo, File
-from file_retriever.utils import logger_config
 from file_retriever.errors import (
     RetrieverFileError,
     RetrieverConnectionError,
     RetrieverAuthenticationError,
 )
-
-logger = logging.getLogger("file_retriever")
-config = logger_config()
-logging.config.dictConfig(config)
 
 
 def test_BaseClient(mock_file_info):
@@ -351,10 +345,15 @@ class TestMock_sftpClient:
 
 @pytest.mark.livetest
 class TestLiveClients:
-    def test_ftpClient_live_test(self, live_ftp_creds):
-        remote_dir = live_ftp_creds["remote_dir"]
-        del live_ftp_creds["remote_dir"], live_ftp_creds["name"]
-        live_ftp = _ftpClient(**live_ftp_creds)
+    def test_ftpClient_live_test(self, live_creds):
+        vendor = "LEILA"
+        remote_dir = os.environ[f"{vendor}_SRC"]
+        live_ftp = _ftpClient(
+            username=os.environ[f"{vendor}_USER"],
+            password=os.environ[f"{vendor}_PASSWORD"],
+            host=os.environ[f"{vendor}_HOST"],
+            port=os.environ[f"{vendor}_PORT"],
+        )
         file_list = live_ftp.list_file_data(dir=remote_dir)
         file_names = [file.file_name for file in file_list]
         file_data = live_ftp.get_file_data(
@@ -372,16 +371,25 @@ class TestLiveClients:
             stub_creds["port"] = "21"
             _ftpClient(**stub_creds)
 
-    def test_ftpClient_live_test_error_perm(self, live_ftp_creds):
-        del live_ftp_creds["remote_dir"], live_ftp_creds["name"]
+    def test_ftpClient_live_test_error_perm(self, live_creds):
+        vendor = "LEILA"
         with pytest.raises(RetrieverAuthenticationError):
-            live_ftp_creds["username"] = "bpl"
-            _ftpClient(**live_ftp_creds)
+            _ftpClient(
+                username="FOO",
+                password=os.environ[f"{vendor}_PASSWORD"],
+                host=os.environ[f"{vendor}_HOST"],
+                port=os.environ[f"{vendor}_PORT"],
+            )
 
-    def test_sftpClient_live_test(self, live_sftp_creds):
-        remote_dir = live_sftp_creds["remote_dir"]
-        del live_sftp_creds["remote_dir"], live_sftp_creds["name"]
-        live_sftp = _sftpClient(**live_sftp_creds)
+    def test_sftpClient_live_test(self, live_creds):
+        vendor = "EASTVIEW"
+        remote_dir = os.environ[f"{vendor}_SRC"]
+        live_sftp = _sftpClient(
+            username=os.environ[f"{vendor}_USER"],
+            password=os.environ[f"{vendor}_PASSWORD"],
+            host=os.environ[f"{vendor}_HOST"],
+            port=os.environ[f"{vendor}_PORT"],
+        )
         file_list = live_sftp.list_file_data(dir=remote_dir)
         file_data = live_sftp.get_file_data(
             file_name=file_list[0].file_name, dir=remote_dir
@@ -396,16 +404,24 @@ class TestLiveClients:
         assert file_data.file_mode > 32768
         assert fetched_file.file_stream.getvalue()[0:1] == b"0"
 
-    def test_sftpClient_live_test_auth_error(self, live_sftp_creds):
-        del live_sftp_creds["remote_dir"], live_sftp_creds["name"]
+    def test_sftpClient_live_test_auth_error(self, live_creds):
+        vendor = "EASTVIEW"
         with pytest.raises(RetrieverAuthenticationError):
-            live_sftp_creds["username"] = "bpl"
-            _sftpClient(**live_sftp_creds)
+            _sftpClient(
+                username="FOO",
+                password=os.environ[f"{vendor}_PASSWORD"],
+                host=os.environ[f"{vendor}_HOST"],
+                port=os.environ[f"{vendor}_PORT"],
+            )
 
     def test_sftpClient_NSDROP(self, NSDROP_creds):
         remote_dir = "NSDROP/TEST/vendor_records"
-        del NSDROP_creds["remote_dir"], NSDROP_creds["name"]
-        live_sftp = _sftpClient(**NSDROP_creds)
+        live_sftp = _sftpClient(
+            username=os.environ["NSDROP_USER"],
+            password=os.environ["NSDROP_PASSWORD"],
+            host=os.environ["NSDROP_HOST"],
+            port=os.environ["NSDROP_PORT"],
+        )
         get_file = live_sftp.get_file_data(file_name="test.txt", dir=remote_dir)
         fetched_file = live_sftp.fetch_file(file=get_file, dir=remote_dir)
         assert fetched_file.file_stream.getvalue() == b""

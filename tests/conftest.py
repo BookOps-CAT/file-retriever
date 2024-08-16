@@ -1,6 +1,7 @@
 import datetime
 import ftplib
 import logging
+import logging.config
 import os
 import paramiko
 from typing import Dict, List, Optional
@@ -9,8 +10,11 @@ import pytest
 from file_retriever._clients import _ftpClient, _sftpClient, _BaseClient
 from file_retriever.connect import Client
 from file_retriever.file import FileInfo
+from file_retriever.utils import logger_config
 
 logger = logging.getLogger("file_retriever")
+config = logger_config()
+logging.config.dictConfig(config)
 
 
 @pytest.fixture
@@ -345,48 +349,10 @@ def stub_creds() -> Dict[str, str]:
 
 
 @pytest.fixture
-def live_ftp_creds() -> Dict[str, str]:
+def live_creds() -> None:
     with open(
         os.path.join(os.environ["USERPROFILE"], ".cred/.sftp/connections.yaml")
     ) as cred_file:
         data = yaml.safe_load(cred_file)
-        return {
-            "username": data["LEILA_USER"],
-            "password": data["LEILA_PASSWORD"],
-            "host": data["LEILA_HOST"],
-            "port": data["LEILA_PORT"],
-            "name": "leila",
-            "remote_dir": data["LEILA_SRC"],
-        }
-
-
-@pytest.fixture
-def live_sftp_creds() -> Dict[str, str]:
-    with open(
-        os.path.join(os.environ["USERPROFILE"], ".cred/.sftp/connections.yaml")
-    ) as cred_file:
-        data = yaml.safe_load(cred_file)
-        return {
-            "username": data["EASTVIEW_USER"],
-            "password": data["EASTVIEW_PASSWORD"],
-            "host": data["EASTVIEW_HOST"],
-            "port": data["EASTVIEW_PORT"],
-            "name": "eastview",
-            "remote_dir": data["EASTVIEW_SRC"],
-        }
-
-
-@pytest.fixture
-def NSDROP_creds() -> Dict[str, str]:
-    with open(
-        os.path.join(os.environ["USERPROFILE"], ".cred/.sftp/connections.yaml")
-    ) as cred_file:
-        data = yaml.safe_load(cred_file)
-        return {
-            "username": data["NSDROP_USER"],
-            "password": data["NSDROP_PASSWORD"],
-            "host": data["NSDROP_HOST"],
-            "port": data["NSDROP_PORT"],
-            "name": "nsdrop",
-            "remote_dir": data["NSDROP_SRC"],
-        }
+        for k, v in data.items():
+            os.environ[k] = v

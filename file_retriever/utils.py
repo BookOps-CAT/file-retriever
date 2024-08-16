@@ -52,7 +52,6 @@ def connect(name: str) -> Client:
         password=os.environ[f"{client_name}_PASSWORD"],
         host=os.environ[f"{client_name}_HOST"],
         port=os.environ[f"{client_name}_PORT"],
-        remote_dir=os.environ[f"{client_name}_SRC"],
     )
 
 

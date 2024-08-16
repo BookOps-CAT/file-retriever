@@ -24,7 +24,6 @@ def test_connect(mock_Client, mocker):
     assert client.name == "FOO"
     assert client.host == "ftp.testvendor.com"
     assert client.port == "21"
-    assert client.remote_dir == "foo_src"
     assert isinstance(client, Client)
     assert client.session is not None
 
