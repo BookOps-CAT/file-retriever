@@ -1,5 +1,6 @@
 import datetime
 import io
+import os
 import pytest
 from file_retriever.connect import Client
 from file_retriever._clients import _ftpClient, _sftpClient
@@ -318,16 +319,30 @@ class TestMockClient:
 
 
 @pytest.mark.livetest
-def test_Client_ftp_live_test(live_ftp_creds):
-    live_ftp = Client(**live_ftp_creds)
-    files = live_ftp.list_file_info()
+def test_Client_ftp_live_test(live_creds):
+    vendor = "LEILA"
+    live_ftp = Client(
+        name=vendor,
+        username=os.environ[f"{vendor}_USER"],
+        password=os.environ[f"{vendor}_PASSWORD"],
+        host=os.environ[f"{vendor}_HOST"],
+        port=os.environ[f"{vendor}_PORT"],
+    )
+    files = live_ftp.list_file_info(remote_dir=os.environ[f"{vendor}_SRC"])
     assert len(files) > 1
     assert "220" in live_ftp.session.connection.getwelcome()
 
 
 @pytest.mark.livetest
-def test_Client_sftp_live_test(live_sftp_creds):
-    live_sftp = Client(**live_sftp_creds)
-    files = live_sftp.list_file_info()
+def test_Client_sftp_live_test(live_creds):
+    vendor = "EASTVIEW"
+    live_sftp = Client(
+        name=vendor,
+        username=os.environ[f"{vendor}_USER"],
+        password=os.environ[f"{vendor}_PASSWORD"],
+        host=os.environ[f"{vendor}_HOST"],
+        port=os.environ[f"{vendor}_PORT"],
+    )
+    files = live_sftp.list_file_info(remote_dir=os.environ[f"{vendor}_SRC"])
     assert len(files) > 1
     assert live_sftp.session.connection.get_channel().active == 1

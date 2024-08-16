@@ -414,7 +414,7 @@ class TestLiveClients:
                 port=os.environ[f"{vendor}_PORT"],
             )
 
-    def test_sftpClient_NSDROP(self, NSDROP_creds):
+    def test_sftpClient_NSDROP(self, live_creds):
         remote_dir = "NSDROP/TEST/vendor_records"
         live_sftp = _sftpClient(
             username=os.environ["NSDROP_USER"],

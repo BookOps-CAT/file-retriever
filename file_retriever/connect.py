@@ -5,13 +5,17 @@ sftp client to interact with remote storage.
 
 import datetime
 import logging
+import logging.config
 import os
 from typing import List, Optional, Union
 from file_retriever._clients import _ftpClient, _sftpClient
 from file_retriever.file import FileInfo, File
 from file_retriever.errors import RetrieverFileError
+from file_retriever.utils import logger_config
 
 logger = logging.getLogger("file_retriever")
+config = logger_config()
+logging.config.dictConfig(config)
 
 
 class Client:

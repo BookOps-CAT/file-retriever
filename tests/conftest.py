@@ -10,11 +10,8 @@ import pytest
 from file_retriever._clients import _ftpClient, _sftpClient, _BaseClient
 from file_retriever.connect import Client
 from file_retriever.file import FileInfo
-from file_retriever.utils import logger_config
 
 logger = logging.getLogger("file_retriever")
-config = logger_config()
-logging.config.dictConfig(config)
 
 
 @pytest.fixture
