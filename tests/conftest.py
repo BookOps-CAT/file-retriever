@@ -1,35 +1,12 @@
 import datetime
 import ftplib
-import logging
-import logging.config
 import os
 import paramiko
 from typing import Dict, List, Optional
 import yaml
 import pytest
-from file_retriever._clients import _ftpClient, _sftpClient, _BaseClient
 from file_retriever.connect import Client
 from file_retriever.file import FileInfo
-
-logger = logging.getLogger("file_retriever")
-
-
-@pytest.fixture
-def mock_config_yaml() -> str:
-    vendor_list = []
-    vendors = ["FOO", "BAR", "BAZ", "NSDROP"]
-    for vendor in vendors:
-        string = (
-            f"{vendor}_HOST: ftp.{vendor.lower()}.com\n"
-            f"{vendor}_USER: {vendor.lower()}\n"
-            f"{vendor}_PASSWORD: bar\n"
-            f"{vendor}_PORT: '21'\n"
-            f"{vendor}_SRC: {vendor.lower()}_src\n"
-            f"{vendor}_DST: {vendor.lower()}_dst\n"
-        )
-        vendor_list.append(string)
-    yaml_string = "\n".join(vendor_list)
-    return yaml_string
 
 
 class FakeUtcNow(datetime.datetime):
@@ -45,12 +22,8 @@ class MockChannel:
     def closed(self):
         return False
 
-    @property
-    def active(self):
-        return 1
 
-
-class MockFileData:
+class MockStatData:
     """File properties for a mock file object."""
 
     def __init__(self):
@@ -63,46 +36,19 @@ class MockFileData:
         self.st_size = 140401
 
     def sftp_attr(self):
-        sftp_attr = paramiko.SFTPAttributes()
-        sftp_attr.filename = self.file_name
-        sftp_attr.st_mtime = self.st_mtime
-        sftp_attr.st_mode = self.st_mode
-        sftp_attr.st_atime = self.st_atime
-        sftp_attr.st_gid = self.st_gid
-        sftp_attr.st_uid = self.st_uid
-        sftp_attr.st_size = self.st_size
-        return sftp_attr
-
-    def file_info(self):
-        return FileInfo(
-            file_name=self.file_name,
-            file_mtime=self.st_mtime,
-            file_size=self.st_size,
-            file_uid=self.st_uid,
-            file_gid=self.st_gid,
-            file_atime=self.st_atime,
-            file_mode=self.st_mode,
-        )
-
-    def os_stat_result(self):
-        result = os.stat_result()
-        result.st_mtime = self.st_mtime
-        result.st_mode = self.st_mode
-        result.st_atime = self.st_atime
-        result.st_gid = self.st_gid
-        result.st_uid = self.st_uid
-        result.st_size = self.st_size
-        return result
+        return paramiko.SFTPAttributes.from_stat(obj=self, filename=self.file_name)
 
 
 @pytest.fixture
 def mock_sftp_attr():
-    return MockFileData().sftp_attr()
+    return MockStatData().sftp_attr()
 
 
 @pytest.fixture
 def mock_file_info():
-    return MockFileData().file_info()
+    return FileInfo.from_stat_data(
+        data=MockStatData(), file_name=MockStatData().file_name
+    )
 
 
 @pytest.fixture
@@ -118,11 +64,17 @@ class MockFTP:
     def close(self, *args, **kwargs) -> None:
         pass
 
+    def connect(self, *args, **kwargs) -> None:
+        pass
+
     def cwd(self, pathname) -> str:
         return pathname
 
+    def login(self, *args, **kwargs) -> None:
+        pass
+
     def nlst(self, *args, **kwargs) -> List[str]:
-        return [MockFileData().file_name]
+        return [MockStatData().file_name]
 
     def pwd(self, *args, **kwargs) -> str:
         return "/"
@@ -136,7 +88,7 @@ class MockFTP:
         return args[1](files)
 
     def size(self, *args, **kwargs) -> int:
-        return MockFileData().st_size
+        return MockStatData().st_size
 
     def storbinary(self, *args, **kwargs) -> None:
         pass
@@ -157,6 +109,9 @@ class MockSFTPClient:
     def close(self, *args, **kwargs) -> None:
         pass
 
+    def connect(self, *args, **kwargs) -> None:
+        pass
+
     def get_channel(self, *args, **kwargs) -> MockChannel:
         return MockChannel()
 
@@ -167,87 +122,41 @@ class MockSFTPClient:
         return fl.write(b"00000")
 
     def listdir_attr(self, *args, **kwargs) -> List[paramiko.SFTPAttributes]:
-        return [MockFileData().sftp_attr()]
+        return [MockStatData().sftp_attr()]
 
     def putfo(self, *args, **kwargs) -> paramiko.SFTPAttributes:
-        return MockFileData().sftp_attr()
+        return MockStatData().sftp_attr()
 
     def stat(self, *args, **kwargs) -> paramiko.SFTPAttributes:
-        return MockFileData().sftp_attr()
+        return MockStatData().sftp_attr()
 
 
-class MockABCClient:
-    """Mock response from SFTP for a successful login"""
-
-    def close(self, *args, **kwargs) -> None:
+@pytest.fixture
+def mock_login(monkeypatch, mock_open_file):
+    def mock_connect(*args, **kwargs):
         pass
-
-
-@pytest.fixture
-def mock_BaseClient(monkeypatch):
-    def mock_bc(*args, **kwargs):
-        return MockABCClient()
-
-    monkeypatch.setattr(_BaseClient, "_connect_to_server", mock_bc)
-
-
-@pytest.fixture
-def stub_client(monkeypatch):
-    def mock_login(*args, **kwargs):
-        pass
-
-    monkeypatch.setattr(ftplib.FTP, "login", mock_login)
-    monkeypatch.setattr(ftplib.FTP, "connect", mock_login)
-    monkeypatch.setattr(paramiko.SSHClient, "connect", mock_login)
-    monkeypatch.setattr(paramiko.SSHClient, "open_sftp", MockSFTPClient)
-    monkeypatch.setattr(datetime, "datetime", FakeUtcNow)
-
-
-@pytest.fixture
-def mock_ftpClient_sftpClient(monkeypatch, mock_open_file, stub_client):
-    def mock_ftp_client(*args, **kwargs):
-        return MockFTP()
-
-    def mock_sftp_client(*args, **kwargs):
-        return MockSFTPClient()
 
     def mock_stat(*args, **kwargs):
-        return MockFileData()
+        return MockStatData()
 
     monkeypatch.setattr(os, "stat", mock_stat)
-    monkeypatch.setattr(_ftpClient, "_connect_to_server", mock_ftp_client)
-    monkeypatch.setattr(_sftpClient, "_connect_to_server", mock_sftp_client)
+    monkeypatch.setattr(paramiko.SSHClient, "connect", mock_connect)
+    monkeypatch.setattr(paramiko.SSHClient, "open_sftp", MockSFTPClient)
+    monkeypatch.setattr(datetime, "datetime", FakeUtcNow)
+    monkeypatch.setattr(ftplib, "FTP", MockFTP)
 
 
 @pytest.fixture
-def mock_cwd(monkeypatch, mock_ftpClient_sftpClient):
-    def mock_root(*args, **kwargs):
-        return "/"
-
-    monkeypatch.setattr(MockSFTPClient, "getcwd", mock_root)
-    monkeypatch.setattr(MockSFTPClient, "getcwd", mock_root)
-
-
-@pytest.fixture
-def mock_other_dir(monkeypatch, mock_ftpClient_sftpClient):
-    def mock_dir(*args, **kwargs):
-        return "bar"
-
-    monkeypatch.setattr(MockSFTPClient, "getcwd", mock_dir)
-    monkeypatch.setattr(MockSFTPClient, "getcwd", mock_dir)
-
-
-@pytest.fixture
-def mock_Client(monkeypatch, mock_ftpClient_sftpClient):
+def mock_Client(monkeypatch, mock_login):
     def mock_file_exists(*args, **kwargs):
         return False
 
-    monkeypatch.setattr(os.path, "exists", mock_file_exists)
     monkeypatch.setattr(Client, "file_exists", mock_file_exists)
+    monkeypatch.setattr(os.path, "exists", mock_file_exists)
 
 
 @pytest.fixture
-def mock_Client_file_exists(monkeypatch, mock_ftpClient_sftpClient):
+def mock_Client_file_exists(monkeypatch, mock_login):
     def path_exists(*args, **kwargs):
         return True
 
@@ -255,85 +164,84 @@ def mock_Client_file_exists(monkeypatch, mock_ftpClient_sftpClient):
 
 
 @pytest.fixture
-def mock_auth_error(monkeypatch, stub_client):
-    def mock_ssh_auth_error(*args, **kwargs):
-        raise paramiko.AuthenticationException
-
+def mock_Client_auth_error(monkeypatch, mock_login):
     def mock_ftp_error_perm(*args, **kwargs):
         raise ftplib.error_perm
+
+    def mock_ssh_auth_error(*args, **kwargs):
+        raise paramiko.AuthenticationException
 
     monkeypatch.setattr(ftplib.FTP, "login", mock_ftp_error_perm)
     monkeypatch.setattr(paramiko.SSHClient, "connect", mock_ssh_auth_error)
 
 
 @pytest.fixture
-def mock_login_connection_error(monkeypatch, stub_client):
+def mock_Client_connection_error(monkeypatch, mock_login):
     def mock_ftp_error_temp(*args, **kwargs):
         raise ftplib.error_temp
 
     def mock_ssh_error(*args, **kwargs):
         raise paramiko.SSHException
 
-    monkeypatch.setattr(paramiko.SSHClient, "connect", mock_ssh_error)
     monkeypatch.setattr(ftplib.FTP, "login", mock_ftp_error_temp)
+    monkeypatch.setattr(paramiko.SSHClient, "connect", mock_ssh_error)
 
 
 @pytest.fixture
-def mock_file_error(monkeypatch, mock_open_file, mock_ftpClient_sftpClient):
+def mock_file_error(monkeypatch, mock_login):
     def mock_os_error(*args, **kwargs):
         raise OSError
 
     def mock_ftp_error_perm(*args, **kwargs):
         raise ftplib.error_perm
 
-    def mock_none_return(*args, **kwargs):
-        return None
-
-    monkeypatch.setattr(MockSFTPClient, "stat", mock_os_error)
-    monkeypatch.setattr(MockSFTPClient, "getfo", mock_os_error)
-    monkeypatch.setattr(MockSFTPClient, "putfo", mock_os_error)
-    monkeypatch.setattr(MockSFTPClient, "listdir_attr", mock_os_error)
     monkeypatch.setattr(os, "stat", mock_os_error)
-    monkeypatch.setattr(MockFTP, "voidcmd", mock_ftp_error_perm)
+    monkeypatch.setattr(MockSFTPClient, "getfo", mock_os_error)
+    monkeypatch.setattr(MockSFTPClient, "listdir_attr", mock_os_error)
+    monkeypatch.setattr(MockSFTPClient, "putfo", mock_os_error)
+    monkeypatch.setattr(MockSFTPClient, "stat", mock_os_error)
     monkeypatch.setattr(MockFTP, "nlst", mock_ftp_error_perm)
     monkeypatch.setattr(MockFTP, "retrbinary", mock_ftp_error_perm)
     monkeypatch.setattr(MockFTP, "storbinary", mock_ftp_error_perm)
-    monkeypatch.setattr(MockFTP, "size", mock_ftp_error_perm)
-    monkeypatch.setattr(MockFTP, "retrlines", mock_none_return)
+    monkeypatch.setattr(MockFTP, "voidcmd", mock_ftp_error_perm)
 
 
 @pytest.fixture
-def mock_ftp_file_not_found(monkeypatch, mock_open_file, mock_ftpClient_sftpClient):
-    def mock_none_return(*args, **kwargs):
-        return None
+def mock_Client_in_cwd(monkeypatch, mock_Client):
+    def mock_root(*args, **kwargs):
+        return "/"
 
-    monkeypatch.setattr(MockFTP, "voidcmd", mock_none_return)
-    monkeypatch.setattr(MockFTP, "nlst", mock_none_return)
-    monkeypatch.setattr(MockFTP, "size", mock_none_return)
-    monkeypatch.setattr(MockFTP, "retrlines", mock_none_return)
+    monkeypatch.setattr(MockSFTPClient, "getcwd", mock_root)
 
 
 @pytest.fixture
-def mock_connection_error_reply(monkeypatch, mock_open_file, stub_client):
-    def mock_ftp_error_reply(*args, **kwargs):
-        raise ftplib.error_reply
+def mock_Client_in_other_dir(monkeypatch, mock_Client):
+    def mock_dir(*args, **kwargs):
+        return "bar"
 
-    monkeypatch.setattr(ftplib.FTP, "storbinary", mock_ftp_error_reply)
-    monkeypatch.setattr(ftplib.FTP, "retrbinary", mock_ftp_error_reply)
-    monkeypatch.setattr(ftplib.FTP, "retrlines", mock_ftp_error_reply)
-    monkeypatch.setattr(ftplib.FTP, "nlst", mock_ftp_error_reply)
+    monkeypatch.setattr(MockSFTPClient, "getcwd", mock_dir)
 
 
 @pytest.fixture
-def mock_connection_dropped(monkeypatch, mock_open_file, stub_client):
+def mock_Client_connection_dropped(monkeypatch, mock_Client):
     def mock_ftp_connection_closed(*args, **kwargs):
         return "426"
 
     def mock_sftp_connection_closed(*args, **kwargs):
         return None
 
-    monkeypatch.setattr(ftplib.FTP, "voidcmd", mock_ftp_connection_closed)
+    monkeypatch.setattr(MockFTP, "voidcmd", mock_ftp_connection_closed)
     monkeypatch.setattr(MockSFTPClient, "get_channel", mock_sftp_connection_closed)
+
+
+@pytest.fixture
+def mock_file_none_type_return(monkeypatch, mock_Client):
+    def mock_none_return(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(MockFTP, "retrlines", mock_none_return)
+    monkeypatch.setattr(MockFTP, "size", mock_none_return)
+    monkeypatch.setattr(MockFTP, "voidcmd", mock_none_return)
 
 
 @pytest.fixture
@@ -342,6 +250,16 @@ def stub_creds() -> Dict[str, str]:
         "host": "ftp.testvendor.com",
         "username": "test_username",
         "password": "test_password",
+    }
+
+
+@pytest.fixture
+def stub_Client_creds() -> Dict[str, str]:
+    return {
+        "host": "ftp.testvendor.com",
+        "username": "test_username",
+        "password": "test_password",
+        "name": "test",
     }
 
 

@@ -190,7 +190,6 @@ class _ftpClient(_BaseClient):
         try:
             self._check_dir(dir)
 
-            # Retrieve file permissions
             permissions = None
 
             def get_file_permissions(data):
@@ -213,6 +212,19 @@ class _ftpClient(_BaseClient):
             )
         except ftplib.error_perm:
             raise RetrieverFileError
+
+    def is_active(self) -> bool:
+        """
+        Checks if connection to server is active.
+
+        Returns:
+            bool: True if connection is active, False otherwise
+        """
+        status = self.connection.voidcmd("NOOP")
+        if status.startswith("2"):
+            return True
+        else:
+            return False
 
     def list_file_data(self, dir: str) -> List[FileInfo]:
         """
@@ -241,19 +253,6 @@ class _ftpClient(_BaseClient):
             raise RetrieverFileError
         return files
 
-    def is_active(self) -> bool:
-        """
-        Checks if connection to server is active.
-
-        Returns:
-            bool: True if connection is active, False otherwise
-        """
-        status = self.connection.voidcmd("NOOP")
-        if status.startswith("2"):
-            return True
-        else:
-            return False
-
     def write_file(self, file: File, dir: str, remote: bool) -> FileInfo:
         """
         Writes file to directory. If `remote` is True, then file is written
@@ -278,7 +277,6 @@ class _ftpClient(_BaseClient):
             ftplib.error_perm: if unable to write file to remote directory
             OSError: if unable to write file to local directory
         """
-        # make sure file stream is at beginning before writing
         file.file_stream.seek(0)
 
         if remote is True:
@@ -433,6 +431,19 @@ class _sftpClient(_BaseClient):
         except OSError:
             raise RetrieverFileError
 
+    def is_active(self) -> bool:
+        """
+        Checks if connection to server is active.
+
+        Returns:
+            bool: True if connection is active, False otherwise
+        """
+        channel = self.connection.get_channel()
+        if channel is None or channel is not None and channel.closed:
+            return False
+        else:
+            return True
+
     def list_file_data(self, dir: str) -> List[FileInfo]:
         """
         Retrieves metadata for each file in `dir` on server.
@@ -453,19 +464,6 @@ class _sftpClient(_BaseClient):
         except OSError as e:
             logger.error(f"Unable to retrieve file data for {dir}: {e}")
             raise RetrieverFileError
-
-    def is_active(self) -> bool:
-        """
-        Checks if connection to server is active.
-
-        Returns:
-            bool: True if connection is active, False otherwise
-        """
-        channel = self.connection.get_channel()
-        if channel is None or channel is not None and channel.closed:
-            return False
-        else:
-            return True
 
     def write_file(self, file: File, dir: str, remote: bool) -> FileInfo:
         """
