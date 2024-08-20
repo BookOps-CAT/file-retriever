@@ -150,10 +150,17 @@ class Client:
             remote: whether to check for files on server (True) or locally (False)
         """
         missing_files = []
+        logger.debug(
+            f"({self.name}) Checking list of {(len(files))} files against `{dir}`"
+        )
         for file in files:
             exists = self.check_file(file=file, dir=dir, remote=remote)
             if not exists:
                 missing_files.append(file)
+        logger.debug(
+            f"({self.name}) {(len(missing_files))} of {len(files)} files "
+            f"missing from `{dir}`"
+        )
         return missing_files
 
     def get_file(self, file: FileInfo, remote_dir: str) -> File:
