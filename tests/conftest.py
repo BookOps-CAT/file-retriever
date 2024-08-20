@@ -151,7 +151,7 @@ def mock_Client(monkeypatch, mock_login):
     def mock_file_exists(*args, **kwargs):
         return False
 
-    monkeypatch.setattr(Client, "file_exists", mock_file_exists)
+    monkeypatch.setattr(Client, "check_file", mock_file_exists)
     monkeypatch.setattr(os.path, "exists", mock_file_exists)
 
 
