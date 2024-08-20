@@ -347,7 +347,8 @@ class _sftpClient(_BaseClient):
         """
         try:
             ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh.load_host_keys(filename=os.path.expanduser("~/.ssh/known_hosts"))
+            ssh.set_missing_host_key_policy(paramiko.WarningPolicy())
             ssh.connect(
                 hostname=host,
                 port=port,
