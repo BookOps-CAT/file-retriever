@@ -331,6 +331,20 @@ class _sftpClient(_BaseClient):
                 username=username, password=password, host=host, port=int(port)
             )
 
+    def __configure_host_keys(self, host_key_file: str) -> None:
+        """
+        Load host keys from file and save to a file to be used by this program.
+        User will be prompted to enter path to file of known_hosts. Host keys
+        will then be saved to a `vendor_hosts` file in the user's `.ssh` directory.
+
+        Args:
+            host_key_file: path to file containing host keys
+
+        """
+        ssh = paramiko.SSHClient()
+        ssh.load_host_keys(filename=host_key_file)
+        ssh.save_host_keys(filename=os.path.expanduser("~/.ssh/vendor_hosts"))
+
     def _connect_to_server(
         self, username: str, password: str, host: str, port: int
     ) -> paramiko.SFTPClient:
@@ -345,9 +359,16 @@ class _sftpClient(_BaseClient):
             paramiko.AuthenticationException: if unable to authenticate with server
 
         """
+        if not os.path.isfile(os.path.expanduser("~/.ssh/vendor_hosts")):
+            logger.debug("Host keys file not found. Creating new file.")
+            file = input("Enter path to host keys file: ")
+            self.__configure_host_keys(host_key_file=file)
         try:
             ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh.load_system_host_keys(
+                filename=os.path.expanduser("~/.ssh/vendor_hosts")
+            )
+            ssh.set_missing_host_key_policy(paramiko.WarningPolicy())
             ssh.connect(
                 hostname=host,
                 port=port,

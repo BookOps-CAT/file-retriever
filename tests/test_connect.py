@@ -85,28 +85,55 @@ class TestMockClient:
         "port",
         [21, 22],
     )
-    def test_Client_file_exists_true(
+    def test_Client_check_file_true(
         self, mock_Client_file_exists, stub_Client_creds, port, mock_file_info
     ):
         stub_Client_creds["port"] = port
         connect = Client(**stub_Client_creds)
-        local_file_exists = connect.file_exists(
-            file=mock_file_info, dir="bar", remote=False
-        )
-        remote_file_exists = connect.file_exists(
-            file=mock_file_info, dir="bar", remote=True
-        )
-        assert local_file_exists is True
-        assert remote_file_exists is True
+        local_file = connect.check_file(file=mock_file_info, dir="bar", remote=False)
+        remote_file = connect.check_file(file=mock_file_info, dir="bar", remote=True)
+        assert local_file is True
+        assert remote_file is True
 
     @pytest.mark.parametrize("port", [21, 22])
-    def test_Client_file_exists_false(
+    def test_Client_check_file_false(
         self, mock_file_error, stub_Client_creds, mock_file_info, port
     ):
         stub_Client_creds["port"] = port
         connect = Client(**stub_Client_creds)
-        file_exists = connect.file_exists(file=mock_file_info, dir="bar", remote=True)
+        file_exists = connect.check_file(file=mock_file_info, dir="bar", remote=True)
         assert file_exists is False
+
+    @pytest.mark.parametrize(
+        "port",
+        [21, 22],
+    )
+    def test_Client_check_file_list_true(
+        self, mock_Client_file_exists, stub_Client_creds, port, mock_file_info
+    ):
+        stub_Client_creds["port"] = port
+        connect = Client(**stub_Client_creds)
+        mock_file_list = [mock_file_info]
+        local_files = connect.check_file_list(
+            files=mock_file_list, dir="bar", remote=False
+        )
+        remote_files = connect.check_file_list(
+            files=mock_file_list, dir="bar", remote=True
+        )
+        assert len(local_files) == 0
+        assert len(remote_files) == 0
+
+    @pytest.mark.parametrize("port", [21, 22])
+    def test_Client_check_file_list_false(
+        self, mock_file_error, stub_Client_creds, mock_file_info, port
+    ):
+        stub_Client_creds["port"] = port
+        connect = Client(**stub_Client_creds)
+        mock_file_list = [mock_file_info]
+        missing_files = connect.check_file_list(
+            files=mock_file_list, dir="bar", remote=True
+        )
+        assert len(missing_files) == 1
 
     @pytest.mark.parametrize(
         "port",

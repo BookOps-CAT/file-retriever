@@ -105,7 +105,7 @@ class Client:
         """Checks if connection to server is active."""
         return self.session.is_active()
 
-    def file_exists(self, file: FileInfo, dir: str, remote: bool) -> bool:
+    def check_file(self, file: FileInfo, dir: str, remote: bool) -> bool:
         """
         Check if file (represented as `FileInfo` object) exists in `dir`.
         If `remote` is the directory will be checked on the server connected
@@ -134,6 +134,34 @@ class Client:
                 return False
         else:
             return os.path.exists(f"{dir}/{file.file_name}")
+
+    def check_file_list(
+        self, files: List[FileInfo], dir: str, remote: bool
+    ) -> List[FileInfo]:
+        """
+        Check if a list of files (represented as `FileInfo` objects) exists in `dir`.
+        If `remote` is True then the directory will be checked on the server connected
+        to via self.session, otherwise the local directory will be checked. Returns
+        list containing only those files that do not exist in `dir`.
+
+        Args:
+            files: list of files to check for as `FileInfo` objects
+            dir: directory to check for files
+            remote: whether to check for files on server (True) or locally (False)
+        """
+        missing_files = []
+        logger.debug(
+            f"({self.name}) Checking list of {(len(files))} files against `{dir}`"
+        )
+        for file in files:
+            exists = self.check_file(file=file, dir=dir, remote=remote)
+            if not exists:
+                missing_files.append(file)
+        logger.debug(
+            f"({self.name}) {(len(missing_files))} of {len(files)} files "
+            f"missing from `{dir}`"
+        )
+        return missing_files
 
     def get_file(self, file: FileInfo, remote_dir: str) -> File:
         """
@@ -253,7 +281,7 @@ class Client:
         """
         if check:
             logger.debug(f"({self.name}) Checking for file in `{dir}` before writing")
-        if check and self.file_exists(file=file, dir=dir, remote=remote) is True:
+        if check and self.check_file(file=file, dir=dir, remote=remote) is True:
             logger.debug(
                 f"({self.name}) Skipping {file.file_name}. File already "
                 f"exists in `{dir}`."
