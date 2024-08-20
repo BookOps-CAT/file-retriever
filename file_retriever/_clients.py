@@ -332,7 +332,15 @@ class _sftpClient(_BaseClient):
             )
 
     def __configure_host_keys(self, host_key_file: str) -> None:
-        """Add host keys to file. To be used when setting up client for first time"""
+        """
+        Load host keys from file and save to a file to be used by this program.
+        User will be prompted to enter path to file of known_hosts. Host keys
+        will then be saved to a `vendor_hosts` file in the user's `.ssh` directory.
+
+        Args:
+            host_key_file: path to file containing host keys
+
+        """
         ssh = paramiko.SSHClient()
         ssh.load_host_keys(filename=host_key_file)
         ssh.save_host_keys(filename=os.path.expanduser("~/.ssh/vendor_hosts"))
@@ -341,10 +349,7 @@ class _sftpClient(_BaseClient):
         self, username: str, password: str, host: str, port: int
     ) -> paramiko.SFTPClient:
         """
-        Opens connection to server via SFTP. Loads host keys from file. If using
-        client for the first time, user will be prompted to enter path to file of
-        known_hosts. Host keys will then be saved to a `vendor_hosts` file in the
-        user's `.ssh` directory.
+        Opens connection to server via SFTP.
 
         Returns:
             `paramiko.SFTPClient` object

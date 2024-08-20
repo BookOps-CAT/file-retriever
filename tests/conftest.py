@@ -155,8 +155,11 @@ def mock_sftp_no_host_keys(monkeypatch, mock_open_file):
     def mock_connect(*args, **kwargs):
         pass
 
+    def mock_input(*args, **kwargs):
+        return "testdir"
+
     monkeypatch.setattr(os.path, "isfile", mock_isfile)
-    monkeypatch.setattr("builtins.input", lambda x: "testdir")
+    monkeypatch.setattr("builtins.input", mock_input)
     monkeypatch.setattr(paramiko.SSHClient, "load_host_keys", mock_connect)
     monkeypatch.setattr(paramiko.SSHClient, "save_host_keys", mock_connect)
     monkeypatch.setattr(paramiko.SSHClient, "load_system_host_keys", mock_connect)
