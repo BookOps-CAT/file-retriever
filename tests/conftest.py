@@ -133,13 +133,17 @@ class MockSFTPClient:
 
 @pytest.fixture
 def mock_login(monkeypatch, mock_open_file):
-    def mock_connect(*args, **kwargs):
-        pass
-
     def mock_stat(*args, **kwargs):
         return MockStatData()
 
+    def mock_isfile(*args, **kwargs):
+        return True
+
+    def mock_connect(*args, **kwargs):
+        pass
+
     monkeypatch.setattr(os, "stat", mock_stat)
+    monkeypatch.setattr(os.path, "isfile", mock_isfile)
     monkeypatch.setattr(paramiko.SSHClient, "connect", mock_connect)
     monkeypatch.setattr(paramiko.SSHClient, "load_system_host_keys", mock_connect)
     monkeypatch.setattr(paramiko.SSHClient, "open_sftp", MockSFTPClient)
