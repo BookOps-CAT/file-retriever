@@ -1,5 +1,6 @@
 from contextlib import nullcontext as does_not_raise
 import io
+import logging
 import os
 import pytest
 from file_retriever._clients import _ftpClient, _sftpClient, _BaseClient
@@ -321,6 +322,7 @@ class TestMock_sftpClient:
     def test_sftpClient_write_file_local_error(
         self, mock_file_error, mock_file_info, stub_creds, caplog
     ):
+        caplog.set_level(logging.DEBUG)
         stub_creds["port"] = "22"
         sftp = _sftpClient(**stub_creds)
         file_obj = File.from_fileinfo(file=mock_file_info, file_stream=io.BytesIO(b"0"))
@@ -334,6 +336,7 @@ class TestMock_sftpClient:
     def test_sftpClient_write_file_remote_error(
         self, mock_file_error, mock_file_info, stub_creds, caplog
     ):
+        caplog.set_level(logging.DEBUG)
         stub_creds["port"] = "22"
         sftp = _sftpClient(**stub_creds)
         file_obj = File.from_fileinfo(file=mock_file_info, file_stream=io.BytesIO(b"0"))
