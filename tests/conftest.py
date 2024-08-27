@@ -1,5 +1,6 @@
 import datetime
 import ftplib
+import logging
 import os
 import paramiko
 from typing import Dict, List, Optional
@@ -7,6 +8,10 @@ import yaml
 import pytest
 from file_retriever.connect import Client
 from file_retriever.file import FileInfo
+
+logging.basicConfig(
+    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 
 class FakeUtcNow(datetime.datetime):
