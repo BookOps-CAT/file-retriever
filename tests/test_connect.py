@@ -1,5 +1,6 @@
 import datetime
 import io
+import logging
 import os
 import pytest
 from file_retriever.connect import Client
@@ -259,6 +260,7 @@ class TestMockClient:
         port,
         remote,
     ):
+        caplog.set_level(logging.DEBUG)
         stub_Client_creds["port"] = port
         connect = Client(**stub_Client_creds)
         mock_file_info.file_stream = io.BytesIO(b"0")

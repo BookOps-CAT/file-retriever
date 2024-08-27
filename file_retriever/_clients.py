@@ -11,7 +11,7 @@ import io
 import logging
 import os
 import paramiko
-from typing import List, Union
+from typing import Union
 from file_retriever.file import FileInfo, File
 from file_retriever.errors import (
     RetrieverFileError,
@@ -19,7 +19,7 @@ from file_retriever.errors import (
     RetrieverAuthenticationError,
 )
 
-logger = logging.getLogger("file_retriever")
+logger = logging.getLogger(__name__)
 
 
 class _BaseClient(ABC):
@@ -60,7 +60,7 @@ class _BaseClient(ABC):
         pass
 
     @abstractmethod
-    def list_file_data(self, dir: str) -> List[FileInfo]:
+    def list_file_data(self, dir: str) -> list[FileInfo]:
         pass
 
     @abstractmethod
@@ -226,7 +226,7 @@ class _ftpClient(_BaseClient):
         else:
             return False
 
-    def list_file_data(self, dir: str) -> List[FileInfo]:
+    def list_file_data(self, dir: str) -> list[FileInfo]:
         """
         Retrieves metadata for each file in `dir` on server.
 
@@ -465,7 +465,7 @@ class _sftpClient(_BaseClient):
         else:
             return True
 
-    def list_file_data(self, dir: str) -> List[FileInfo]:
+    def list_file_data(self, dir: str) -> list[FileInfo]:
         """
         Retrieves metadata for each file in `dir` on server.
 
