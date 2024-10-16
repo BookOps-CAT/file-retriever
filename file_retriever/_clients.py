@@ -64,6 +64,10 @@ class _BaseClient(ABC):
         pass
 
     @abstractmethod
+    def list_file_names(self, dir: str) -> list[str]:
+        pass
+
+    @abstractmethod
     def is_active(self) -> bool:
         pass
 
@@ -252,6 +256,27 @@ class _ftpClient(_BaseClient):
         except ftplib.error_perm:
             raise RetrieverFileError
         return files
+
+    def list_file_names(self, dir: str) -> list[str]:
+        """
+        Retrieves names of all files in `dir` on server.
+
+        Args:
+            dir: directory on server to interact with
+
+        Returns:
+            list of file names as strings returns an empty list if
+            `dir` is empty or does not exist
+
+        Raises:
+            ftplib.error_perm:
+                if unable to list file data due to permissions error
+
+        """
+        try:
+            return self.connection.nlst(dir)
+        except ftplib.error_perm:
+            raise RetrieverFileError
 
     def write_file(self, file: File, dir: str, remote: bool) -> FileInfo:
         """
@@ -482,6 +507,26 @@ class _sftpClient(_BaseClient):
         try:
             file_metadata = self.connection.listdir_attr(dir)
             return [FileInfo.from_stat_data(data=i) for i in file_metadata]
+        except OSError as e:
+            logger.error(f"Unable to retrieve file data for {dir}: {e}")
+            raise RetrieverFileError
+
+    def list_file_names(self, dir: str) -> list[str]:
+        """
+        Retrieves names of all files in `dir` on server.
+
+        Args:
+            dir: directory on server to interact with
+
+        Returns:
+            list of file names as strings returns an empty list if
+            `dir` is empty or does not exist
+
+        Raises:
+            OSError: if `dir` does not exist
+        """
+        try:
+            return self.connection.listdir(dir)
         except OSError as e:
             logger.error(f"Unable to retrieve file data for {dir}: {e}")
             raise RetrieverFileError

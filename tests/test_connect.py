@@ -211,6 +211,22 @@ class TestMockClient:
         with pytest.raises(RetrieverFileError):
             connect.list_file_info(remote_dir="testdir")
 
+    @pytest.mark.parametrize("port", [21, 22])
+    def test_Client_list_files(self, mock_Client, stub_Client_creds, port):
+        stub_Client_creds["port"] = port
+        connect = Client(**stub_Client_creds)
+        files = connect.list_files(remote_dir="testdir")
+        assert all(isinstance(file, str) for file in files)
+        assert len(files) == 1
+        assert files[0] == "foo.mrc"
+
+    @pytest.mark.parametrize("port", [21, 22])
+    def test_Client_list_files_error(self, mock_file_error, stub_Client_creds, port):
+        stub_Client_creds["port"] = port
+        connect = Client(**stub_Client_creds)
+        with pytest.raises(RetrieverFileError):
+            connect.list_files(remote_dir="testdir")
+
     @pytest.mark.parametrize(
         "port, check",
         [(21, True), (21, False), (22, True), (22, False)],
@@ -266,7 +282,7 @@ class TestMockClient:
         mock_file_info.file_stream = io.BytesIO(b"0")
         connect.put_file(file=mock_file_info, dir="bar", remote=remote, check=True)
         assert (
-            f"Skipping {mock_file_info.file_name}. File already exists in `bar`."
+            f"{mock_file_info.file_name} already exists in `bar`. Skipping write."
             in caplog.text
         )
 

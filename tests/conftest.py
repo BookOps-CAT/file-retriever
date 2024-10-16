@@ -121,6 +121,9 @@ class MockSFTPClient:
     def getfo(self, remotepath, fl, *args, **kwargs) -> bytes:
         return fl.write(b"00000")
 
+    def listdir(self, *args, **kwargs) -> List[str]:
+        return ["foo.mrc"]
+
     def listdir_attr(self, *args, **kwargs) -> List[paramiko.SFTPAttributes]:
         return [MockStatData().sftp_attr()]
 
@@ -222,6 +225,7 @@ def mock_file_error(monkeypatch, mock_login):
 
     monkeypatch.setattr(os, "stat", mock_os_error)
     monkeypatch.setattr(MockSFTPClient, "getfo", mock_os_error)
+    monkeypatch.setattr(MockSFTPClient, "listdir", mock_os_error)
     monkeypatch.setattr(MockSFTPClient, "listdir_attr", mock_os_error)
     monkeypatch.setattr(MockSFTPClient, "putfo", mock_os_error)
     monkeypatch.setattr(MockSFTPClient, "stat", mock_os_error)

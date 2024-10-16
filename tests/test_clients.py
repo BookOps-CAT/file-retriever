@@ -21,6 +21,7 @@ def test_BaseClient(mock_file_info):
     assert ftp_bc.fetch_file(file="foo.mrc", dir="bar") is None
     assert ftp_bc.get_file_data(file_name="foo.mrc", dir="bar") is None
     assert ftp_bc.list_file_data(dir="foo") is None
+    assert ftp_bc.list_file_names(dir="foo") is None
     assert ftp_bc.is_active() is None
     assert ftp_bc.write_file(file=mock_file_info, dir="bar", remote=True) is None
 
@@ -125,6 +126,20 @@ class TestMock_ftpClient:
         ftp = _ftpClient(**stub_creds)
         with pytest.raises(RetrieverFileError):
             ftp.list_file_data(dir="testdir")
+
+    def test_ftpClient_list_file_names(self, mock_Client, stub_creds):
+        stub_creds["port"] = "21"
+        ftp = _ftpClient(**stub_creds)
+        files = ftp.list_file_names(dir="testdir")
+        assert all(isinstance(file, str) for file in files)
+        assert len(files) == 1
+        assert files[0] == "foo.mrc"
+
+    def test_ftpClient_list_file_names_error(self, mock_file_error, stub_creds):
+        stub_creds["port"] = "21"
+        ftp = _ftpClient(**stub_creds)
+        with pytest.raises(RetrieverFileError):
+            ftp.list_file_names(dir="testdir")
 
     def test_ftpClient_is_active_true(self, mock_Client, stub_creds):
         stub_creds["port"] = "21"
@@ -286,6 +301,20 @@ class TestMock_sftpClient:
         sftp = _sftpClient(**stub_creds)
         with pytest.raises(RetrieverFileError):
             sftp.list_file_data(dir="testdir")
+
+    def test_sftpClient_list_file_names(self, mock_Client, stub_creds):
+        stub_creds["port"] = "22"
+        ftp = _sftpClient(**stub_creds)
+        files = ftp.list_file_names(dir="testdir")
+        assert all(isinstance(file, str) for file in files)
+        assert len(files) == 1
+        assert files[0] == "foo.mrc"
+
+    def test_sftpClient_list_file_names_error(self, mock_file_error, stub_creds):
+        stub_creds["port"] = "22"
+        sftp = _sftpClient(**stub_creds)
+        with pytest.raises(RetrieverFileError):
+            sftp.list_file_names(dir="testdir")
 
     def test_sftpClient_is_active_true(self, mock_Client, stub_creds):
         stub_creds["port"] = "22"

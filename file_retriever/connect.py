@@ -47,9 +47,7 @@ class Client:
         self.name = name
         self.host = host
         self.port = port
-
         self.session = self.__connect_to_server(username=username, password=password)
-        logger.info(f"({self.name}) Connected to server")
 
     def __connect_to_server(
         self, username: str, password: str
@@ -72,7 +70,9 @@ class Client:
                     port=self.port,
                 )
             case _:
-                logger.error(f"Invalid port number: {self.port}")
+                logger.error(
+                    f"Invalid port number: {self.port}. Cannot connect to server."
+                )
                 raise ValueError(f"Invalid port number: {self.port}")
 
     def __enter__(self, *args):
@@ -93,9 +93,8 @@ class Client:
 
     def close(self):
         """Closes connection"""
-        logger.info(f"({self.name}) Closing client session")
         self.session.close()
-        logger.info(f"({self.name}) Connection closed")
+        logger.info(f"({self.name}) Client session closed")
 
     def check_connection(self) -> bool:
         """Checks if connection to server is active."""
@@ -146,17 +145,12 @@ class Client:
             remote: whether to check for files on server (True) or locally (False)
         """
         missing_files = []
-        logger.debug(
-            f"({self.name}) Checking list of {(len(files))} files against `{dir}`"
-        )
         for file in files:
             exists = self.check_file(file=file, dir=dir, remote=remote)
             if not exists:
                 missing_files.append(file)
-        logger.debug(
-            f"({self.name}) {(len(missing_files))} of {len(files)} files "
-            f"missing from `{dir}`"
-        )
+        if len(missing_files) == 0:
+            logger.debug(f"({self.name}) All files found in `{dir}`")
         return missing_files
 
     def get_file(self, file: FileInfo, remote_dir: str) -> File:
@@ -170,7 +164,6 @@ class Client:
         Returns:
             file fetched from `remote_dir` as `File` object
         """
-        logger.debug(f"({self.name}) Fetching {file.file_name} from " f"`{remote_dir}`")
         return self.session.fetch_file(file=file, dir=remote_dir)
 
     def get_file_info(self, file_name: str, remote_dir: str) -> FileInfo:
@@ -184,9 +177,6 @@ class Client:
         Returns:
             file in `remote_dir` represented as `FileInfo` object
         """
-        logger.debug(
-            f"({self.name}) Retrieving file info for {file_name} " f"from {remote_dir}"
-        )
         try:
             return self.session.get_file_data(file_name=file_name, dir=remote_dir)
         except RetrieverFileError as e:
@@ -222,12 +212,11 @@ class Client:
             time_delta = datetime.timedelta(days=time_delta)
         else:
             time_delta = time_delta
-        logger.debug(f"({self.name}) Retrieving list of files in `{remote_dir}`")
         files = self.session.list_file_data(dir=remote_dir)
         if time_delta and time_delta is not None:
             logger.debug(
-                f"({self.name}) Filtering list for files created "
-                f"since {datetime.datetime.strftime((today - time_delta), '%Y-%m-%d')}"
+                f"Checking for files created since "
+                f"{datetime.datetime.strftime((today - time_delta), '%Y-%m-%d')}"
             )
             recent_files = [
                 i
@@ -238,12 +227,26 @@ class Client:
                 >= today - time_delta
             ]
             logger.debug(
-                f"({self.name}) {len(recent_files)} recent file(s) in `{remote_dir}`"
+                f"({self.name}) {len(recent_files)} new file(s) in `{remote_dir}` "
+                f"since {datetime.datetime.strftime((today - time_delta), '%Y-%m-%d')}"
             )
             return recent_files
         else:
             logger.debug(f"({self.name}) {len(files)} file(s) in `{remote_dir}`")
             return files
+
+    def list_files(self, remote_dir: str) -> List[str]:
+        """
+        Lists names of files in a directory on server.
+
+        Args:
+            remote_dir:
+                directory on server to interact with
+
+        Returns:
+            list of files in `remote_dir` represented as strings
+        """
+        return self.session.list_file_names(dir=remote_dir)
 
     def put_file(
         self,
@@ -275,12 +278,10 @@ class Client:
         Returns:
             `FileInfo` objects representing written file
         """
-        if check:
-            logger.debug(f"({self.name}) Checking for file in `{dir}` before writing")
         if check and self.check_file(file=file, dir=dir, remote=remote) is True:
             logger.debug(
-                f"({self.name}) Skipping {file.file_name}. File already "
-                f"exists in `{dir}`."
+                f"({self.name}) {file.file_name} already exists in `{dir}`. "
+                f"Skipping write."
             )
             return None
         else:
