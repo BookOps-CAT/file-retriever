@@ -291,7 +291,8 @@ class _ftpClient(_BaseClient):
 
         """
         try:
-            return self.connection.nlst(dir)
+            files = self.connection.nlst(dir)
+            return [os.path.basename(i) for i in files]
         except ftplib.error_perm:
             raise RetrieverFileError
 
