@@ -20,6 +20,22 @@ def test_FileInfo():
     assert isinstance(file, FileInfo)
 
 
+def test_FileInfo_baker_taylor():
+    file = FileInfo(
+        file_name="foo.mrc", file_mtime=1704070800, file_mode=None, file_size=1
+    )
+    assert file.file_name == "foo.mrc"
+    assert file.file_mtime == 1704070800
+    assert file.file_mode == 0
+    assert file.file_size == 1
+    assert file.file_gid is None
+    assert file.file_uid is None
+    assert file.file_atime is None
+    assert isinstance(file.file_name, str)
+    assert isinstance(file.file_mtime, int)
+    assert isinstance(file, FileInfo)
+
+
 def test_FileInfo_from_stat_data(mock_sftp_attr):
     foo = FileInfo.from_stat_data(data=mock_sftp_attr)
     bar_attr = mock_sftp_attr

@@ -14,7 +14,7 @@ class FileInfo:
         self,
         file_name: str,
         file_mtime: Union[float, int, str],
-        file_mode: Union[str, int],
+        file_mode: Union[str, int, None],
         file_size: int,
         file_uid: Optional[int] = None,
         file_gid: Optional[int] = None,
@@ -52,6 +52,8 @@ class FileInfo:
 
         if isinstance(file_mode, str):
             self.file_mode = self.__parse_permissions(file_mode)
+        elif file_mode is None:
+            self.file_mode = 0
         else:
             self.file_mode = int(file_mode)
 
