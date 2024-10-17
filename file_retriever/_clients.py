@@ -202,6 +202,7 @@ class _ftpClient(_BaseClient):
             ftplib.error_perm:
                 if unable to retrieve file data due to permissions error
         """
+        current_dir = self.connection.pwd()
         try:
             self._check_dir(dir)
 
@@ -218,6 +219,7 @@ class _ftpClient(_BaseClient):
             if size is None or time is None:
                 logger.error(f"Unable to retrieve file data for {file_name}.")
                 raise RetrieverFileError
+            self._check_dir(current_dir)
             return FileInfo(
                 file_name=file_name,
                 file_size=size,
