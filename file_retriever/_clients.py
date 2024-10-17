@@ -139,13 +139,13 @@ class _ftpClient(_BaseClient):
         else:
             pass
 
-    def _is_file(self, dir: str, file_name: str) -> str:
+    def _is_file(self, dir: str, file_name: str) -> bool:
         """Checks if object is a file or directory."""
         try:
             self.connection.voidcmd(f"CWD {dir}/{file_name}")
-            return "directory"
+            return False
         except ftplib.error_perm:
-            return "file"
+            return True
 
     def close(self) -> None:
         """Closes connection to server."""
@@ -265,8 +265,8 @@ class _ftpClient(_BaseClient):
             file_names = self.connection.nlst(dir)
             for name in file_names:
                 file_base_name = os.path.basename(name)
-                obj_type = self._is_file(dir, file_base_name)
-                if obj_type == "file":
+                file_obj = self._is_file(dir, file_base_name)
+                if file_obj is True:
                     file_info = self.get_file_data(file_name=file_base_name, dir=dir)
                     files.append(file_info)
                 self._check_dir(current_dir)
@@ -437,6 +437,14 @@ class _sftpClient(_BaseClient):
             self.connection.chdir(dir)
         else:
             pass
+
+    def _is_file(self, dir: str, file_name: str) -> bool:
+        """Checks if object is a file or directory."""
+        try:
+            self.connection.chdir(f"CWD {dir}/{file_name}")
+            return False
+        except OSError:
+            return True
 
     def close(self):
         """Closes connection to server."""

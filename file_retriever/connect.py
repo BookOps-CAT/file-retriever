@@ -161,6 +161,19 @@ class Client:
             )
             raise e
 
+    def is_file(self, file_name: str, remote_dir: str) -> bool:
+        """
+        Checks if file exists in directory on server.
+
+        Args:
+            file_name: name of file to check for
+            remote_dir: directory on server to interact with
+
+        Returns:
+            bool indicating if `file_name` exists in `remote_dir`
+        """
+        return self.session._is_file(file_name=file_name, dir=remote_dir)
+
     def list_file_info(self, remote_dir: str) -> List[FileInfo]:
         """
         Lists metadata for each file in a directory on server.
