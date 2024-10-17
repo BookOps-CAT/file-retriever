@@ -3,7 +3,6 @@ This module contains the `Client` class which can be used to create an ftp or
 sftp client to interact with remote storage.
 """
 
-import datetime
 import logging
 import os
 from typing import List, Optional, Union
@@ -54,7 +53,7 @@ class Client:
     ) -> Union[_ftpClient, _sftpClient]:
         match self.port:
             case 21 | "21":
-                logger.info(f"({self.name}) Connecting to {self.host} via FTP client")
+                logger.debug(f"({self.name}) Connecting to {self.host} via FTP client")
                 return _ftpClient(
                     username=username,
                     password=password,
@@ -62,7 +61,7 @@ class Client:
                     port=self.port,
                 )
             case 22 | "22":
-                logger.info(f"({self.name}) Connecting to {self.host} via SFTP client")
+                logger.debug(f"({self.name}) Connecting to {self.host} via SFTP client")
                 return _sftpClient(
                     username=username,
                     password=password,
@@ -94,7 +93,7 @@ class Client:
     def close(self):
         """Closes connection"""
         self.session.close()
-        logger.info(f"({self.name}) Client session closed")
+        logger.debug(f"({self.name}) Client session closed")
 
     def check_connection(self) -> bool:
         """Checks if connection to server is active."""
@@ -130,29 +129,6 @@ class Client:
         else:
             return os.path.exists(f"{dir}/{file.file_name}")
 
-    def check_file_list(
-        self, files: List[FileInfo], dir: str, remote: bool
-    ) -> List[FileInfo]:
-        """
-        Check if a list of files (represented as `FileInfo` objects) exists in `dir`.
-        If `remote` is True then the directory will be checked on the server connected
-        to via self.session, otherwise the local directory will be checked. Returns
-        list containing only those files that do not exist in `dir`.
-
-        Args:
-            files: list of files to check for as `FileInfo` objects
-            dir: directory to check for files
-            remote: whether to check for files on server (True) or locally (False)
-        """
-        missing_files = []
-        for file in files:
-            exists = self.check_file(file=file, dir=dir, remote=remote)
-            if not exists:
-                missing_files.append(file)
-        if len(missing_files) == 0:
-            logger.debug(f"({self.name}) All files found in `{dir}`")
-        return missing_files
-
     def get_file(self, file: FileInfo, remote_dir: str) -> File:
         """
         Fetches a file from a server.
@@ -185,55 +161,18 @@ class Client:
             )
             raise e
 
-    def list_file_info(
-        self,
-        remote_dir: str,
-        time_delta: Optional[Union[datetime.timedelta, int]] = None,
-    ) -> List[FileInfo]:
+    def list_file_info(self, remote_dir: str) -> List[FileInfo]:
         """
-        Lists each file in a directory on server. If `time_delta`
-        is provided then files created in period since today - time_delta
-        will be listed. time_delta can be an integer representing the number of
-        days or a `datetime.timedelta` object.
+        Lists metadata for each file in a directory on server.
 
         Args:
             remote_dir:
                 directory on server to interact with
-            time_delta:
-                how far back to check for files. can be an integer representing
-                the number of days or a `datetime.timedelta` object. default is None,
-                ie. all files will be listed.
-
         Returns:
             list of files in `remote_dir` represented as `FileInfo` objects
         """
-        today = datetime.datetime.now(tz=datetime.timezone.utc)
-        if isinstance(time_delta, int):
-            time_delta = datetime.timedelta(days=time_delta)
-        else:
-            time_delta = time_delta
         files = self.session.list_file_data(dir=remote_dir)
-        if time_delta and time_delta is not None:
-            logger.debug(
-                f"Checking for files created since "
-                f"{datetime.datetime.strftime((today - time_delta), '%Y-%m-%d')}"
-            )
-            recent_files = [
-                i
-                for i in files
-                if datetime.datetime.fromtimestamp(
-                    i.file_mtime, tz=datetime.timezone.utc
-                )
-                >= today - time_delta
-            ]
-            logger.debug(
-                f"({self.name}) {len(recent_files)} new file(s) in `{remote_dir}` "
-                f"since {datetime.datetime.strftime((today - time_delta), '%Y-%m-%d')}"
-            )
-            return recent_files
-        else:
-            logger.debug(f"({self.name}) {len(files)} file(s) in `{remote_dir}`")
-            return files
+        return files
 
     def list_files(self, remote_dir: str) -> List[str]:
         """
@@ -281,7 +220,7 @@ class Client:
         if check and self.check_file(file=file, dir=dir, remote=remote) is True:
             logger.debug(
                 f"({self.name}) {file.file_name} already exists in `{dir}`. "
-                f"Skipping write."
+                f"Skipping copy."
             )
             return None
         else:
