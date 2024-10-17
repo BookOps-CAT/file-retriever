@@ -134,7 +134,7 @@ class _ftpClient(_BaseClient):
 
     def _check_dir(self, dir: str) -> None:
         """Changes directory to `dir` if not already in `dir`."""
-        if self.connection.pwd().lstrip("/") != dir.lstrip("/"):
+        if self.connection.pwd().endswith(dir) is False:
             self.connection.cwd(dir)
         else:
             pass

@@ -65,13 +65,13 @@ class TestMock_ftpClient:
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
         obj_type = ftp._is_file(dir="foo", file_name="bar.mrc")
-        assert obj_type == "file"
+        assert obj_type is True
 
     def test_ftpClient_is_file_directory(self, mock_file_error, stub_creds):
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
         obj_type = ftp._is_file(dir="foo", file_name="bar")
-        assert obj_type == "directory"
+        assert obj_type is False
 
     def test_ftpClient_close(self, mock_Client, stub_creds):
         stub_creds["port"] = "21"
