@@ -228,7 +228,8 @@ class _ftpClient(_BaseClient):
                 file_mtime=time[4:],
                 file_mode=permissions,
             )
-        except ftplib.error_perm:
+        except ftplib.error_perm as e:
+            logger.error(f"Unable to retrieve file data for {file_name}: {e}")
             raise RetrieverFileError
 
     def is_active(self) -> bool:
@@ -274,7 +275,8 @@ class _ftpClient(_BaseClient):
                     file_info = self.get_file_data(file_name=file_base_name, dir=dir)
                     files.append(file_info)
                 self._check_dir(current_dir)
-        except ftplib.error_perm:
+        except ftplib.error_perm as e:
+            logger.error(f"Unable to retrieve file list from {dir}: {e}")
             raise RetrieverFileError
         return files
 
@@ -297,7 +299,8 @@ class _ftpClient(_BaseClient):
         try:
             files = self.connection.nlst(dir)
             return [os.path.basename(i) for i in files]
-        except ftplib.error_perm:
+        except ftplib.error_perm as e:
+            logger.error(f"Unable to retrieve file list from {dir}: {e}")
             raise RetrieverFileError
 
     def write_file(self, file: File, dir: str, remote: bool) -> FileInfo:
@@ -504,7 +507,8 @@ class _sftpClient(_BaseClient):
             return FileInfo.from_stat_data(
                 data=self.connection.stat(file_name), file_name=file_name
             )
-        except OSError:
+        except OSError as e:
+            logger.error(f"Unable to retrieve file data for {file_name}: {e}")
             raise RetrieverFileError
 
     def is_active(self) -> bool:
@@ -538,7 +542,7 @@ class _sftpClient(_BaseClient):
             file_metadata = self.connection.listdir_attr(dir)
             return [FileInfo.from_stat_data(data=i) for i in file_metadata]
         except OSError as e:
-            logger.error(f"Unable to retrieve file data for {dir}: {e}")
+            logger.error(f"Unable to retrieve file list from {dir}: {e}")
             raise RetrieverFileError
 
     def list_file_names(self, dir: str) -> list[str]:
@@ -558,7 +562,7 @@ class _sftpClient(_BaseClient):
         try:
             return self.connection.listdir(dir)
         except OSError as e:
-            logger.error(f"Unable to retrieve file data for {dir}: {e}")
+            logger.error(f"Unable to retrieve file list from {dir}: {e}")
             raise RetrieverFileError
 
     def write_file(self, file: File, dir: str, remote: bool) -> FileInfo:
