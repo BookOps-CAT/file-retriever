@@ -61,6 +61,18 @@ class TestMock_ftpClient:
         with does_not_raise():
             ftp._check_dir(dir="/")
 
+    def test_ftpClient_is_file(self, mock_Client, stub_creds):
+        stub_creds["port"] = "21"
+        ftp = _ftpClient(**stub_creds)
+        obj_type = ftp._is_file(dir="foo", file_name="bar.mrc")
+        assert obj_type == "file"
+
+    def test_ftpClient_is_file_directory(self, mock_file_error, stub_creds):
+        stub_creds["port"] = "21"
+        ftp = _ftpClient(**stub_creds)
+        obj_type = ftp._is_file(dir="foo", file_name="bar")
+        assert obj_type == "directory"
+
     def test_ftpClient_close(self, mock_Client, stub_creds):
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
@@ -379,7 +391,23 @@ class TestMock_sftpClient:
 
 @pytest.mark.livetest
 class TestLiveClients:
-    def test_ftpClient_live_test(self, live_creds):
+    def test_ftpClient_live_test_baker_taylor(self, live_creds):
+        remote_dir = os.environ["BAKERTAYLOR_NYPL_SRC"]
+        live_ftp = _ftpClient(
+            username=os.environ["BAKERTAYLOR_NYPL_USER"],
+            password=os.environ["BAKERTAYLOR_NYPL_PASSWORD"],
+            host=os.environ["BAKERTAYLOR_NYPL_HOST"],
+            port=os.environ["BAKERTAYLOR_NYPL_PORT"],
+        )
+        # test_data = live_ftp.connection.sendcmd("PWD")
+        # print(test_data)
+        # print(remote_dir)
+        # test_data_2 = live_ftp.connection.sendcmd(f"CWD {remote_dir}")
+        # print(test_data_2)
+        file_list = live_ftp.list_file_data(dir=remote_dir)
+        assert len(file_list) > 1
+
+    def test_ftpClient_live_test_leila(self, live_creds):
         remote_dir = os.environ["LEILA_SRC"]
         live_ftp = _ftpClient(
             username=os.environ["LEILA_USER"],

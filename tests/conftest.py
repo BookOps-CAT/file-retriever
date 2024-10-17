@@ -61,6 +61,9 @@ def mock_open_file(mocker):
 class MockFTP:
     """Mock response from FTP server for a successful login"""
 
+    def __init__(self, *args, **kwargs):
+        self.host = "ftp.testvendor.com"
+
     def close(self, *args, **kwargs) -> None:
         pass
 
@@ -96,6 +99,8 @@ class MockFTP:
     def voidcmd(self, *args, **kwargs) -> str:
         if "MDTM" in args[0]:
             return "213 20240101010000"
+        elif "CWD" in args[0]:
+            raise ftplib.error_perm
         else:
             return "200"
 
@@ -223,6 +228,9 @@ def mock_file_error(monkeypatch, mock_login):
     def mock_ftp_error_perm(*args, **kwargs):
         raise ftplib.error_perm
 
+    def mock_voidcmd(*args, **kwargs):
+        pass
+
     monkeypatch.setattr(os, "stat", mock_os_error)
     monkeypatch.setattr(MockSFTPClient, "getfo", mock_os_error)
     monkeypatch.setattr(MockSFTPClient, "listdir", mock_os_error)
@@ -230,9 +238,10 @@ def mock_file_error(monkeypatch, mock_login):
     monkeypatch.setattr(MockSFTPClient, "putfo", mock_os_error)
     monkeypatch.setattr(MockSFTPClient, "stat", mock_os_error)
     monkeypatch.setattr(MockFTP, "nlst", mock_ftp_error_perm)
+    monkeypatch.setattr(MockFTP, "size", mock_ftp_error_perm)
     monkeypatch.setattr(MockFTP, "retrbinary", mock_ftp_error_perm)
     monkeypatch.setattr(MockFTP, "storbinary", mock_ftp_error_perm)
-    monkeypatch.setattr(MockFTP, "voidcmd", mock_ftp_error_perm)
+    monkeypatch.setattr(MockFTP, "voidcmd", mock_voidcmd)
 
 
 @pytest.fixture

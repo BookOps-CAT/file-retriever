@@ -139,6 +139,14 @@ class _ftpClient(_BaseClient):
         else:
             pass
 
+    def _is_file(self, dir: str, file_name: str) -> str:
+        """Checks if object is a file or directory."""
+        try:
+            self.connection.voidcmd(f"CWD {dir}/{file_name}")
+            return "directory"
+        except ftplib.error_perm:
+            return "file"
+
     def close(self) -> None:
         """Closes connection to server."""
         self.connection.close()
@@ -180,6 +188,9 @@ class _ftpClient(_BaseClient):
         calls to server to retrieve file size, modification time,
         and permissions.
 
+        The Baker & Taylor server does not provide the same amount
+        of metadata as other servers so file permissions are not retrieved.
+
         Args:
             file_name: name of file to retrieve metadata for
             dir: directory on server to interact with
@@ -198,16 +209,15 @@ class _ftpClient(_BaseClient):
 
             def get_file_permissions(data):
                 nonlocal permissions
-                permissions = data[0:10]
+                if "baker-taylor" not in self.connection.host:
+                    permissions = data[0:10]
 
-            self.connection.retrlines(f"LIST {file_name}", get_file_permissions),
-            size = self.connection.size(file_name)
+            self.connection.retrlines(f"LIST {file_name}", get_file_permissions)
             time = self.connection.voidcmd(f"MDTM {file_name}")
-
-            if permissions is None or size is None or time is None:
+            size = self.connection.size(file_name)
+            if size is None or time is None:
                 logger.error(f"Unable to retrieve file data for {file_name}.")
                 raise RetrieverFileError
-
             return FileInfo(
                 file_name=file_name,
                 file_size=size,
@@ -232,7 +242,10 @@ class _ftpClient(_BaseClient):
 
     def list_file_data(self, dir: str) -> list[FileInfo]:
         """
-        Retrieves metadata for each file in `dir` on server.
+        Retrieves metadata for each file in `dir` on server. Metadata will be
+        retrieved for files but not directories. If an object file is found in
+        `dir` that is actually a directory, the file will be skipped and not
+        included in the returned list.
 
         Args:
             dir: directory on server to interact with
@@ -247,12 +260,16 @@ class _ftpClient(_BaseClient):
 
         """
         files = []
+        current_dir = self.connection.pwd()
         try:
             file_names = self.connection.nlst(dir)
             for name in file_names:
                 file_base_name = os.path.basename(name)
-                file_info = self.get_file_data(file_name=file_base_name, dir=dir)
-                files.append(file_info)
+                obj_type = self._is_file(dir, file_base_name)
+                if obj_type == "file":
+                    file_info = self.get_file_data(file_name=file_base_name, dir=dir)
+                    files.append(file_info)
+                self._check_dir(current_dir)
         except ftplib.error_perm:
             raise RetrieverFileError
         return files
