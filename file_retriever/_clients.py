@@ -142,6 +142,8 @@ class _ftpClient(_BaseClient):
     def _is_file(self, dir: str, file_name: str) -> bool:
         """Checks if object is a file or directory."""
         current_dir = self.connection.pwd()
+        if dir == "":
+            dir = current_dir
         try:
             self.connection.voidcmd(f"CWD {dir}/{file_name}")
             self._check_dir(current_dir)

@@ -73,6 +73,18 @@ class TestMock_ftpClient:
         obj_type = ftp._is_file(dir="foo", file_name="bar")
         assert obj_type is False
 
+    def test_ftpClient_is_file_root(self, mock_Client, stub_creds):
+        stub_creds["port"] = "21"
+        ftp = _ftpClient(**stub_creds)
+        obj_type = ftp._is_file(dir="", file_name="bar.mrc")
+        assert obj_type is True
+
+    def test_ftpClient_is_file_root_directory(self, mock_file_error, stub_creds):
+        stub_creds["port"] = "21"
+        ftp = _ftpClient(**stub_creds)
+        obj_type = ftp._is_file(dir="", file_name="bar")
+        assert obj_type is False
+
     def test_ftpClient_close(self, mock_Client, stub_creds):
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
@@ -399,11 +411,6 @@ class TestLiveClients:
             host=os.environ["BAKERTAYLOR_NYPL_HOST"],
             port=os.environ["BAKERTAYLOR_NYPL_PORT"],
         )
-        # test_data = live_ftp.connection.sendcmd("PWD")
-        # print(test_data)
-        # print(remote_dir)
-        # test_data_2 = live_ftp.connection.sendcmd(f"CWD {remote_dir}")
-        # print(test_data_2)
         file_list = live_ftp.list_file_data(dir=remote_dir)
         assert len(file_list) > 1
 
