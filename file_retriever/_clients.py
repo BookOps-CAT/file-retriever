@@ -176,14 +176,16 @@ class _ftpClient(_BaseClient):
             ftplib.error_perm: if unable to retrieve file from server
 
         """
+        current_dir = self.connection.pwd()
         try:
             self._check_dir(dir)
             fh = io.BytesIO()
             self.connection.retrbinary(f"RETR {file.file_name}", fh.write)
             fetched_file = File.from_fileinfo(file=file, file_stream=fh)
+            self._check_dir(current_dir)
             return fetched_file
         except ftplib.error_perm as e:
-            logger.error(f"Unable to retrieve {file} from {dir}: {e}")
+            logger.error(f"Unable to retrieve {file.file_name} from {dir}: {e}")
             raise RetrieverFileError
 
     def get_file_data(self, file_name: str, dir: str) -> FileInfo:
