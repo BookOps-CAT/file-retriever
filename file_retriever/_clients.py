@@ -11,6 +11,7 @@ import io
 import logging
 import os
 import paramiko
+import stat
 from typing import Union
 from file_retriever.file import FileInfo, File
 from file_retriever.errors import (
@@ -450,11 +451,11 @@ class _sftpClient(_BaseClient):
 
     def _is_file(self, dir: str, file_name: str) -> bool:
         """Checks if object is a file or directory."""
-        try:
-            self.connection.chdir(f"CWD {dir}/{file_name}")
-            return False
-        except OSError:
+        file_data = self.connection.lstat(f"{dir}/{file_name}")
+        if file_data.st_mode is not None and stat.filemode(file_data.st_mode)[0] == "-":
             return True
+        else:
+            return False
 
     def close(self):
         """Closes connection to server."""

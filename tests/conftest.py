@@ -2,6 +2,7 @@ import datetime
 import ftplib
 import os
 import paramiko
+import stat
 from typing import Dict, List, Optional
 import yaml
 import pytest
@@ -126,6 +127,9 @@ class MockSFTPClient:
     def getfo(self, remotepath, fl, *args, **kwargs) -> bytes:
         return fl.write(b"00000")
 
+    def lstat(self, *args, **kwargs) -> paramiko.SFTPAttributes:
+        return MockStatData().sftp_attr()
+
     def listdir(self, *args, **kwargs) -> List[str]:
         return ["foo.mrc"]
 
@@ -231,7 +235,11 @@ def mock_file_error(monkeypatch, mock_login):
     def mock_voidcmd(*args, **kwargs):
         pass
 
+    def mock_stat_filemode(*args, **kwargs):
+        return "drw-r--r--"
+
     monkeypatch.setattr(os, "stat", mock_os_error)
+    monkeypatch.setattr(stat, "filemode", mock_stat_filemode)
     monkeypatch.setattr(MockSFTPClient, "getfo", mock_os_error)
     monkeypatch.setattr(MockSFTPClient, "listdir", mock_os_error)
     monkeypatch.setattr(MockSFTPClient, "listdir_attr", mock_os_error)
