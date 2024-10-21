@@ -11,6 +11,7 @@ import io
 import logging
 import os
 import paramiko
+import stat
 from typing import Union
 from file_retriever.file import FileInfo, File
 from file_retriever.errors import (
@@ -48,6 +49,10 @@ class _BaseClient(ABC):
         pass
 
     @abstractmethod
+    def _is_file(self, dir: str, file_name: str) -> bool:
+        pass
+
+    @abstractmethod
     def close(self) -> None:
         pass
 
@@ -60,11 +65,15 @@ class _BaseClient(ABC):
         pass
 
     @abstractmethod
+    def is_active(self) -> bool:
+        pass
+
+    @abstractmethod
     def list_file_data(self, dir: str) -> list[FileInfo]:
         pass
 
     @abstractmethod
-    def is_active(self) -> bool:
+    def list_file_names(self, dir: str) -> list[str]:
         pass
 
     @abstractmethod
@@ -135,6 +144,18 @@ class _ftpClient(_BaseClient):
         else:
             pass
 
+    def _is_file(self, dir: str, file_name: str) -> bool:
+        """Checks if object is a file or directory."""
+        current_dir = self.connection.pwd()
+        if dir == "":
+            dir = current_dir
+        try:
+            self.connection.voidcmd(f"CWD {dir}/{file_name}")
+            self._check_dir(current_dir)
+            return False
+        except ftplib.error_perm:
+            return True
+
     def close(self) -> None:
         """Closes connection to server."""
         self.connection.close()
@@ -160,14 +181,16 @@ class _ftpClient(_BaseClient):
             ftplib.error_perm: if unable to retrieve file from server
 
         """
+        current_dir = self.connection.pwd()
         try:
             self._check_dir(dir)
             fh = io.BytesIO()
             self.connection.retrbinary(f"RETR {file.file_name}", fh.write)
             fetched_file = File.from_fileinfo(file=file, file_stream=fh)
+            self._check_dir(current_dir)
             return fetched_file
         except ftplib.error_perm as e:
-            logger.error(f"Unable to retrieve {file} from {dir}: {e}")
+            logger.error(f"Unable to retrieve {file.file_name} from {dir}: {e}")
             raise RetrieverFileError
 
     def get_file_data(self, file_name: str, dir: str) -> FileInfo:
@@ -175,6 +198,9 @@ class _ftpClient(_BaseClient):
         Retrieves metadata for file on server. Requires multiple
         calls to server to retrieve file size, modification time,
         and permissions.
+
+        The Baker & Taylor server does not provide the same amount
+        of metadata as other servers so file permissions are not retrieved.
 
         Args:
             file_name: name of file to retrieve metadata for
@@ -187,6 +213,7 @@ class _ftpClient(_BaseClient):
             ftplib.error_perm:
                 if unable to retrieve file data due to permissions error
         """
+        current_dir = self.connection.pwd()
         try:
             self._check_dir(dir)
 
@@ -194,16 +221,16 @@ class _ftpClient(_BaseClient):
 
             def get_file_permissions(data):
                 nonlocal permissions
-                permissions = data[0:10]
+                if "baker-taylor" not in self.connection.host:
+                    permissions = data[0:10]
 
-            self.connection.retrlines(f"LIST {file_name}", get_file_permissions),
+            self.connection.retrlines(f"LIST {file_name}", get_file_permissions)
             size = self.connection.size(file_name)
             time = self.connection.voidcmd(f"MDTM {file_name}")
-
-            if permissions is None or size is None or time is None:
+            if size is None or time is None:
                 logger.error(f"Unable to retrieve file data for {file_name}.")
                 raise RetrieverFileError
-
+            self._check_dir(current_dir)
             return FileInfo(
                 file_name=file_name,
                 file_size=size,
@@ -228,7 +255,10 @@ class _ftpClient(_BaseClient):
 
     def list_file_data(self, dir: str) -> list[FileInfo]:
         """
-        Retrieves metadata for each file in `dir` on server.
+        Retrieves metadata for each file in `dir` on server. Metadata will be
+        retrieved for files but not directories. If an object is found in `dir`
+        that is actually a directory, the file will be skipped and not
+        included in the returned list.
 
         Args:
             dir: directory on server to interact with
@@ -243,15 +273,43 @@ class _ftpClient(_BaseClient):
 
         """
         files = []
+        current_dir = self.connection.pwd()
         try:
             file_names = self.connection.nlst(dir)
             for name in file_names:
                 file_base_name = os.path.basename(name)
-                file_info = self.get_file_data(file_name=file_base_name, dir=dir)
-                files.append(file_info)
-        except ftplib.error_perm:
+                file_obj = self._is_file(dir, file_base_name)
+                if file_obj is True:
+                    file_info = self.get_file_data(file_name=file_base_name, dir=dir)
+                    files.append(file_info)
+                self._check_dir(current_dir)
+        except ftplib.error_perm as e:
+            logger.error(f"Unable to retrieve file list from {dir}: {e}")
             raise RetrieverFileError
         return files
+
+    def list_file_names(self, dir: str) -> list[str]:
+        """
+        Retrieves names of all files in `dir` on server.
+
+        Args:
+            dir: directory on server to interact with
+
+        Returns:
+            list of file names as strings returns an empty list if
+            `dir` is empty or does not exist
+
+        Raises:
+            ftplib.error_perm:
+                if unable to list file data due to permissions error
+
+        """
+        try:
+            files = self.connection.nlst(dir)
+            return [os.path.basename(i) for i in files]
+        except ftplib.error_perm as e:
+            logger.error(f"Unable to retrieve file list from {dir}: {e}")
+            raise RetrieverFileError
 
     def write_file(self, file: File, dir: str, remote: bool) -> FileInfo:
         """
@@ -395,6 +453,14 @@ class _sftpClient(_BaseClient):
         else:
             pass
 
+    def _is_file(self, dir: str, file_name: str) -> bool:
+        """Checks if object is a file or directory."""
+        file_data = self.connection.lstat(f"{dir}/{file_name}")
+        if file_data.st_mode is not None and stat.filemode(file_data.st_mode)[0] == "-":
+            return True
+        else:
+            return False
+
     def close(self):
         """Closes connection to server."""
         self.connection.close()
@@ -483,7 +549,27 @@ class _sftpClient(_BaseClient):
             file_metadata = self.connection.listdir_attr(dir)
             return [FileInfo.from_stat_data(data=i) for i in file_metadata]
         except OSError as e:
-            logger.error(f"Unable to retrieve file data for {dir}: {e}")
+            logger.error(f"Unable to retrieve file list from {dir}: {e}")
+            raise RetrieverFileError
+
+    def list_file_names(self, dir: str) -> list[str]:
+        """
+        Retrieves names of all files in `dir` on server.
+
+        Args:
+            dir: directory on server to interact with
+
+        Returns:
+            list of file names as strings returns an empty list if
+            `dir` is empty or does not exist
+
+        Raises:
+            OSError: if `dir` does not exist
+        """
+        try:
+            return self.connection.listdir(dir)
+        except OSError as e:
+            logger.error(f"Unable to retrieve file list from {dir}: {e}")
             raise RetrieverFileError
 
     def write_file(self, file: File, dir: str, remote: bool) -> FileInfo:

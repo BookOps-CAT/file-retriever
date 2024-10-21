@@ -1,4 +1,3 @@
-import datetime
 import io
 import logging
 import os
@@ -109,37 +108,6 @@ class TestMockClient:
         "port",
         [21, 22],
     )
-    def test_Client_check_file_list_true(
-        self, mock_Client_file_exists, stub_Client_creds, port, mock_file_info
-    ):
-        stub_Client_creds["port"] = port
-        connect = Client(**stub_Client_creds)
-        mock_file_list = [mock_file_info]
-        local_files = connect.check_file_list(
-            files=mock_file_list, dir="bar", remote=False
-        )
-        remote_files = connect.check_file_list(
-            files=mock_file_list, dir="bar", remote=True
-        )
-        assert len(local_files) == 0
-        assert len(remote_files) == 0
-
-    @pytest.mark.parametrize("port", [21, 22])
-    def test_Client_check_file_list_false(
-        self, mock_file_error, stub_Client_creds, mock_file_info, port
-    ):
-        stub_Client_creds["port"] = port
-        connect = Client(**stub_Client_creds)
-        mock_file_list = [mock_file_info]
-        missing_files = connect.check_file_list(
-            files=mock_file_list, dir="bar", remote=True
-        )
-        assert len(missing_files) == 1
-
-    @pytest.mark.parametrize(
-        "port",
-        [21, 22],
-    )
     def test_Client_get_file(
         self, mock_Client, mock_file_info, stub_Client_creds, port
     ):
@@ -178,29 +146,45 @@ class TestMockClient:
             connect.get_file_info(file_name="foo.mrc", remote_dir="testdir")
 
     @pytest.mark.parametrize("port", [21, 22])
+    def test_Client_is_file(self, mock_Client, stub_Client_creds, port):
+        stub_Client_creds["port"] = port
+        connect = Client(**stub_Client_creds)
+        is_file = connect.is_file(file_name="bar.mrc", remote_dir="foo")
+        assert is_file is True
+
+    @pytest.mark.parametrize("port", [21, 22])
+    def test_Client_is_file_directory(self, mock_file_error, stub_Client_creds, port):
+        stub_Client_creds["port"] = port
+        connect = Client(**stub_Client_creds)
+        is_file = connect.is_file(file_name="bar", remote_dir="foo")
+        assert is_file is False
+
+    @pytest.mark.parametrize("port", [21, 22])
+    def test_Client_is_file_root(self, mock_Client, stub_Client_creds, port):
+        stub_Client_creds["port"] = port
+        connect = Client(**stub_Client_creds)
+        is_file = connect.is_file(file_name="bar.mrc", remote_dir="")
+        assert is_file is True
+
+    @pytest.mark.parametrize("port", [21, 22])
+    def test_Client_is_file_root_directory(
+        self, mock_file_error, stub_Client_creds, port
+    ):
+        stub_Client_creds["port"] = port
+        connect = Client(**stub_Client_creds)
+        is_file = connect.is_file(file_name="bar", remote_dir="")
+        assert is_file is False
+
+    @pytest.mark.parametrize("port", [21, 22])
     def test_Client_list_file_info(self, mock_Client, stub_Client_creds, port):
         stub_Client_creds["port"] = port
         connect = Client(**stub_Client_creds)
         all_files = connect.list_file_info(remote_dir="testdir")
-        recent_files_int = connect.list_file_info(
-            remote_dir="testdir",
-            time_delta=5,
-        )
-        recent_files_dt = connect.list_file_info(
-            remote_dir="testdir", time_delta=datetime.timedelta(days=5)
-        )
         assert all(isinstance(file, FileInfo) for file in all_files)
-        assert all(isinstance(file, FileInfo) for file in recent_files_int)
-        assert all(isinstance(file, FileInfo) for file in recent_files_dt)
-        assert len(all_files) == 1
-        assert len(recent_files_int) == 0
-        assert len(recent_files_dt) == 0
         assert all_files[0].file_name == "foo.mrc"
         assert all_files[0].file_mtime == 1704070800
         assert all_files[0].file_size == 140401
         assert all_files[0].file_mode == 33188
-        assert recent_files_int == []
-        assert recent_files_dt == []
 
     @pytest.mark.parametrize("port", [21, 22])
     def test_Client_list_file_info_error(
@@ -210,6 +194,22 @@ class TestMockClient:
         connect = Client(**stub_Client_creds)
         with pytest.raises(RetrieverFileError):
             connect.list_file_info(remote_dir="testdir")
+
+    @pytest.mark.parametrize("port", [21, 22])
+    def test_Client_list_files(self, mock_Client, stub_Client_creds, port):
+        stub_Client_creds["port"] = port
+        connect = Client(**stub_Client_creds)
+        files = connect.list_files(remote_dir="testdir")
+        assert all(isinstance(file, str) for file in files)
+        assert len(files) == 1
+        assert files[0] == "foo.mrc"
+
+    @pytest.mark.parametrize("port", [21, 22])
+    def test_Client_list_files_error(self, mock_file_error, stub_Client_creds, port):
+        stub_Client_creds["port"] = port
+        connect = Client(**stub_Client_creds)
+        with pytest.raises(RetrieverFileError):
+            connect.list_files(remote_dir="testdir")
 
     @pytest.mark.parametrize(
         "port, check",
@@ -266,36 +266,55 @@ class TestMockClient:
         mock_file_info.file_stream = io.BytesIO(b"0")
         connect.put_file(file=mock_file_info, dir="bar", remote=remote, check=True)
         assert (
-            f"Skipping {mock_file_info.file_name}. File already exists in `bar`."
+            f"{mock_file_info.file_name} already exists in `bar`. Skipping copy."
             in caplog.text
         )
 
 
 @pytest.mark.livetest
-def test_Client_ftp_live_test(live_creds):
-    vendor = "LEILA"
-    live_ftp = Client(
-        name=vendor,
-        username=os.environ[f"{vendor}_USER"],
-        password=os.environ[f"{vendor}_PASSWORD"],
-        host=os.environ[f"{vendor}_HOST"],
-        port=os.environ[f"{vendor}_PORT"],
-    )
-    files = live_ftp.list_file_info(remote_dir=os.environ[f"{vendor}_SRC"])
-    assert len(files) > 1
-    assert "220" in live_ftp.session.connection.getwelcome()
+class TestLiveClient:
+    def test_Client_ftp_live_test_leila(self, live_creds):
+        vendor = "LEILA"
+        live_ftp = Client(
+            name=vendor,
+            username=os.environ[f"{vendor}_USER"],
+            password=os.environ[f"{vendor}_PASSWORD"],
+            host=os.environ[f"{vendor}_HOST"],
+            port=os.environ[f"{vendor}_PORT"],
+        )
+        files = live_ftp.list_file_info(remote_dir=os.environ[f"{vendor}_SRC"])
+        assert len(files) > 1
+        assert "220" in live_ftp.session.connection.getwelcome()
 
+    def test_Client_ftp_live_test_bakertaylor(self, live_creds):
+        vendor = "BAKERTAYLOR_BPL"
+        live_ftp = Client(
+            name=vendor,
+            username=os.environ[f"{vendor}_USER"],
+            password=os.environ[f"{vendor}_PASSWORD"],
+            host=os.environ[f"{vendor}_HOST"],
+            port=os.environ[f"{vendor}_PORT"],
+        )
+        files = live_ftp.list_file_info(remote_dir=os.environ[f"{vendor}_SRC"])
+        assert len(files) > 1
+        assert "220" in live_ftp.session.connection.getwelcome()
 
-@pytest.mark.livetest
-def test_Client_sftp_live_test(live_creds):
-    vendor = "EASTVIEW"
-    live_sftp = Client(
-        name=vendor,
-        username=os.environ[f"{vendor}_USER"],
-        password=os.environ[f"{vendor}_PASSWORD"],
-        host=os.environ[f"{vendor}_HOST"],
-        port=os.environ[f"{vendor}_PORT"],
-    )
-    files = live_sftp.list_file_info(remote_dir=os.environ[f"{vendor}_SRC"])
-    assert len(files) > 1
-    assert live_sftp.session.connection.get_channel().active == 1
+    def test_Client_sftp_eastview_live_test(self, live_creds):
+        vendors = [
+            "EASTVIEW",
+            "AMALIVRE_LPA",
+            "AMALIVRE_SASB",
+            "AMALIVRE_SCHOMBURG",
+            "AMALIVRE_RL",
+        ]
+        for vendor in vendors:
+            live_sftp = Client(
+                name=vendor,
+                username=os.environ[f"{vendor}_USER"],
+                password=os.environ[f"{vendor}_PASSWORD"],
+                host=os.environ[f"{vendor}_HOST"],
+                port=os.environ[f"{vendor}_PORT"],
+            )
+            files = live_sftp.list_file_info(remote_dir=os.environ[f"{vendor}_SRC"])
+            assert len(files) > 1
+            assert live_sftp.session.connection.get_channel().active == 1
