@@ -49,6 +49,10 @@ class _BaseClient(ABC):
         pass
 
     @abstractmethod
+    def _is_file(self, dir: str, file_name: str) -> bool:
+        pass
+
+    @abstractmethod
     def close(self) -> None:
         pass
 
@@ -61,15 +65,15 @@ class _BaseClient(ABC):
         pass
 
     @abstractmethod
+    def is_active(self) -> bool:
+        pass
+
+    @abstractmethod
     def list_file_data(self, dir: str) -> list[FileInfo]:
         pass
 
     @abstractmethod
     def list_file_names(self, dir: str) -> list[str]:
-        pass
-
-    @abstractmethod
-    def is_active(self) -> bool:
         pass
 
     @abstractmethod
@@ -135,7 +139,7 @@ class _ftpClient(_BaseClient):
 
     def _check_dir(self, dir: str) -> None:
         """Changes directory to `dir` if not already in `dir`."""
-        if self.connection.pwd().endswith(dir) is False:
+        if self.connection.pwd().lstrip("/") != dir.lstrip("/"):
             self.connection.cwd(dir)
         else:
             pass
@@ -221,8 +225,8 @@ class _ftpClient(_BaseClient):
                     permissions = data[0:10]
 
             self.connection.retrlines(f"LIST {file_name}", get_file_permissions)
-            time = self.connection.voidcmd(f"MDTM {file_name}")
             size = self.connection.size(file_name)
+            time = self.connection.voidcmd(f"MDTM {file_name}")
             if size is None or time is None:
                 logger.error(f"Unable to retrieve file data for {file_name}.")
                 raise RetrieverFileError
@@ -252,8 +256,8 @@ class _ftpClient(_BaseClient):
     def list_file_data(self, dir: str) -> list[FileInfo]:
         """
         Retrieves metadata for each file in `dir` on server. Metadata will be
-        retrieved for files but not directories. If an object file is found in
-        `dir` that is actually a directory, the file will be skipped and not
+        retrieved for files but not directories. If an object is found in `dir`
+        that is actually a directory, the file will be skipped and not
         included in the returned list.
 
         Args:

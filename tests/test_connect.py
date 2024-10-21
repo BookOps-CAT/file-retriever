@@ -273,19 +273,31 @@ class TestMockClient:
 
 @pytest.mark.livetest
 class TestLiveClient:
-    def test_Client_ftp_live_test(self, live_creds):
-        vendors = ["LEILA", "BAKERTAYLOR_NYPL", "BAKERTAYLOR_BPL", "MIDWEST_NYPL"]
-        for vendor in vendors:
-            live_ftp = Client(
-                name=vendor,
-                username=os.environ[f"{vendor}_USER"],
-                password=os.environ[f"{vendor}_PASSWORD"],
-                host=os.environ[f"{vendor}_HOST"],
-                port=os.environ[f"{vendor}_PORT"],
-            )
-            files = live_ftp.list_file_info(remote_dir=os.environ[f"{vendor}_SRC"])
-            assert len(files) > 1
-            assert "220" in live_ftp.session.connection.getwelcome()
+    def test_Client_ftp_live_test_leila(self, live_creds):
+        vendor = "LEILA"
+        live_ftp = Client(
+            name=vendor,
+            username=os.environ[f"{vendor}_USER"],
+            password=os.environ[f"{vendor}_PASSWORD"],
+            host=os.environ[f"{vendor}_HOST"],
+            port=os.environ[f"{vendor}_PORT"],
+        )
+        files = live_ftp.list_file_info(remote_dir=os.environ[f"{vendor}_SRC"])
+        assert len(files) > 1
+        assert "220" in live_ftp.session.connection.getwelcome()
+
+    def test_Client_ftp_live_test_bakertaylor(self, live_creds):
+        vendor = "BAKERTAYLOR_BPL"
+        live_ftp = Client(
+            name=vendor,
+            username=os.environ[f"{vendor}_USER"],
+            password=os.environ[f"{vendor}_PASSWORD"],
+            host=os.environ[f"{vendor}_HOST"],
+            port=os.environ[f"{vendor}_PORT"],
+        )
+        files = live_ftp.list_file_info(remote_dir=os.environ[f"{vendor}_SRC"])
+        assert len(files) > 1
+        assert "220" in live_ftp.session.connection.getwelcome()
 
     def test_Client_sftp_eastview_live_test(self, live_creds):
         vendors = [

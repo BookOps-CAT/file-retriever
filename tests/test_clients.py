@@ -17,12 +17,13 @@ def test_BaseClient(mock_file_info):
     ftp_bc = _BaseClient(username="foo", password="bar", host="baz", port=21)
     assert ftp_bc.__dict__ == {"connection": None}
     assert ftp_bc._check_dir(dir="foo") is None
+    assert ftp_bc._is_file(dir="foo", file_name="bar") is None
     assert ftp_bc.close() is None
     assert ftp_bc.fetch_file(file="foo.mrc", dir="bar") is None
     assert ftp_bc.get_file_data(file_name="foo.mrc", dir="bar") is None
+    assert ftp_bc.is_active() is None
     assert ftp_bc.list_file_data(dir="foo") is None
     assert ftp_bc.list_file_names(dir="foo") is None
-    assert ftp_bc.is_active() is None
     assert ftp_bc.write_file(file=mock_file_info, dir="bar", remote=True) is None
 
 
