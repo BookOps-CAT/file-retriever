@@ -194,7 +194,7 @@ class File(FileInfo):
         self,
         file_name: str,
         file_mtime: Union[float, str],
-        file_mode: Union[str, int],
+        file_mode: Union[str, int, None],
         file_size: int,
         file_stream: io.BytesIO,
         file_uid: Optional[int] = None,
