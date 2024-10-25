@@ -611,7 +611,7 @@ class _sftpClient(_BaseClient):
                 raise RetrieverFileError
         else:
             try:
-                local_file = f"{dir}/{file}"
+                local_file = f"{dir}/{file.file_name}"
                 with open(local_file, "wb") as lf:
                     lf.write(file.file_stream.getbuffer())
                 return FileInfo.from_stat_data(os.stat(local_file), file.file_name)
