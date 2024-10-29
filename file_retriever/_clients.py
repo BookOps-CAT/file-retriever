@@ -27,7 +27,10 @@ class _BaseClient(ABC):
     """An abstract base class for FTP and SFTP clients."""
 
     @abstractmethod
-    def __init__(self, username: str, password: str, host: str, port: Union[str, int]):
+    def __init__(
+        self, name, username: str, password: str, host: str, port: Union[str, int]
+    ):
+        self.name = name.upper()
         self.connection: Union[ftplib.FTP, paramiko.SFTPClient] = (
             self._connect_to_server(
                 username=username, password=password, host=host, port=int(port)
@@ -89,6 +92,7 @@ class _ftpClient(_BaseClient):
 
     def __init__(
         self,
+        name: str,
         username: str,
         password: str,
         host: str,
@@ -97,12 +101,14 @@ class _ftpClient(_BaseClient):
         """Initializes client instance.
 
         Args:
+            name: name of vendor to track client activity
             username: username for server
             password: password for server
             host: server address
             port: port number for server
 
         """
+        self.name = name.upper()
         if port in [21, "21"]:
             self.connection: ftplib.FTP = self._connect_to_server(
                 username=username, password=password, host=host, port=int(port)
@@ -131,10 +137,12 @@ class _ftpClient(_BaseClient):
             )
             return ftp_client
         except ftplib.error_perm as e:
-            logger.error(f"Unable to authenticate with provided credentials: {e}")
+            logger.error(
+                f"({self.name}) Unable to authenticate with provided credentials: {e}"
+            )
             raise RetrieverAuthenticationError
         except ftplib.error_temp as e:
-            logger.error(f"Unable to connect to {host}: {e}")
+            logger.error(f"({self.name}) Unable to connect to {host}: {e}")
             raise RetrieverConnectionError
 
     def _check_dir(self, dir: str) -> None:
@@ -190,7 +198,9 @@ class _ftpClient(_BaseClient):
             self._check_dir(current_dir)
             return fetched_file
         except ftplib.error_perm as e:
-            logger.error(f"Unable to retrieve {file.file_name} from {dir}: {e}")
+            logger.error(
+                f"({self.name}) Unable to retrieve {file.file_name} from {dir}: {e}"
+            )
             raise RetrieverFileError
 
     def get_file_data(self, file_name: str, dir: str) -> FileInfo:
@@ -228,7 +238,9 @@ class _ftpClient(_BaseClient):
             size = self.connection.size(file_name)
             time = self.connection.voidcmd(f"MDTM {file_name}")
             if size is None or time is None:
-                logger.error(f"Unable to retrieve file data for {file_name}.")
+                logger.error(
+                    f"({self.name}) Unable to retrieve file data for {file_name}."
+                )
                 raise RetrieverFileError
             self._check_dir(current_dir)
             return FileInfo(
@@ -284,7 +296,7 @@ class _ftpClient(_BaseClient):
                     files.append(file_info)
                 self._check_dir(current_dir)
         except ftplib.error_perm as e:
-            logger.error(f"Unable to retrieve file list from {dir}: {e}")
+            logger.error(f"({self.name}) Unable to retrieve file list from {dir}: {e}")
             raise RetrieverFileError
         return files
 
@@ -308,7 +320,7 @@ class _ftpClient(_BaseClient):
             files = self.connection.nlst(dir)
             return [os.path.basename(i) for i in files]
         except ftplib.error_perm as e:
-            logger.error(f"Unable to retrieve file list from {dir}: {e}")
+            logger.error(f"({self.name}) Unable to retrieve file list from {dir}: {e}")
             raise RetrieverFileError
 
     def write_file(self, file: File, dir: str, remote: bool) -> FileInfo:
@@ -344,7 +356,8 @@ class _ftpClient(_BaseClient):
                 return self.get_file_data(file_name=file.file_name, dir=dir)
             except ftplib.error_perm as e:
                 logger.error(
-                    f"Unable to write {file.file_name} to remote directory: {e}"
+                    f"({self.name}) Unable to write {file.file_name} "
+                    f"to remote directory: {e}"
                 )
                 raise RetrieverFileError
         else:
@@ -357,7 +370,8 @@ class _ftpClient(_BaseClient):
                 )
             except OSError as e:
                 logger.error(
-                    f"Unable to write {file.file_name} to local directory: {e}"
+                    f"({self.name}) Unable to write {file.file_name} "
+                    f"to local directory: {e}"
                 )
                 raise RetrieverFileError
 
@@ -370,6 +384,7 @@ class _sftpClient(_BaseClient):
 
     def __init__(
         self,
+        name: str,
         username: str,
         password: str,
         host: str,
@@ -378,12 +393,14 @@ class _sftpClient(_BaseClient):
         """Initializes client instance.
 
         Args:
+            name: name of vendor to track client activity
             username: username for server
             password: password for server
             host: server address
             port: port number for server
 
         """
+        self.name = name.upper()
         if port in [22, "22"]:
             self.connection: paramiko.SFTPClient = self._connect_to_server(
                 username=username, password=password, host=host, port=int(port)
@@ -436,10 +453,12 @@ class _sftpClient(_BaseClient):
             sftp_client = ssh.open_sftp()
             return sftp_client
         except paramiko.AuthenticationException as e:
-            logger.error(f"Unable to authenticate with provided credentials: {e}")
+            logger.error(
+                f"({self.name}) Unable to authenticate with provided credentials: {e}"
+            )
             raise RetrieverAuthenticationError
         except paramiko.SSHException as e:
-            logger.error(f"Unable to connect to {host}: {e}")
+            logger.error(f"({self.name}) Unable to connect to {host}: {e}")
             raise RetrieverConnectionError
 
     def _check_dir(self, dir: str) -> None:
@@ -493,7 +512,9 @@ class _sftpClient(_BaseClient):
             fetched_file = File.from_fileinfo(file=file, file_stream=fh)
             return fetched_file
         except OSError as e:
-            logger.error(f"Unable to retrieve {file.file_name} from {dir}: {e}")
+            logger.error(
+                f"({self.name}) Unable to retrieve {file.file_name} from {dir}: {e}"
+            )
             raise RetrieverFileError
 
     def get_file_data(self, file_name: str, dir: str) -> FileInfo:
@@ -549,7 +570,7 @@ class _sftpClient(_BaseClient):
             file_metadata = self.connection.listdir_attr(dir)
             return [FileInfo.from_stat_data(data=i) for i in file_metadata]
         except OSError as e:
-            logger.error(f"Unable to retrieve file list from {dir}: {e}")
+            logger.error(f"({self.name}) Unable to retrieve file list from {dir}: {e}")
             raise RetrieverFileError
 
     def list_file_names(self, dir: str) -> list[str]:
@@ -569,7 +590,7 @@ class _sftpClient(_BaseClient):
         try:
             return self.connection.listdir(dir)
         except OSError as e:
-            logger.error(f"Unable to retrieve file list from {dir}: {e}")
+            logger.error(f"({self.name}) Unable to retrieve file list from {dir}: {e}")
             raise RetrieverFileError
 
     def write_file(self, file: File, dir: str, remote: bool) -> FileInfo:
@@ -606,7 +627,8 @@ class _sftpClient(_BaseClient):
                 return FileInfo.from_stat_data(written_file, file_name=file.file_name)
             except OSError as e:
                 logger.error(
-                    f"Unable to write {file.file_name} to remote directory: {e}"
+                    f"({self.name}) Unable to write {file.file_name} "
+                    f"to remote directory: {e}"
                 )
                 raise RetrieverFileError
         else:
@@ -617,6 +639,7 @@ class _sftpClient(_BaseClient):
                 return FileInfo.from_stat_data(os.stat(local_file), file.file_name)
             except OSError as e:
                 logger.error(
-                    f"Unable to write {file.file_name} to local directory: {e}"
+                    f"({self.name}) Unable to write {file.file_name} "
+                    f"to local directory: {e}"
                 )
                 raise RetrieverFileError

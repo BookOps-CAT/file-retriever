@@ -14,8 +14,10 @@ from file_retriever.errors import (
 
 def test_BaseClient(mock_file_info):
     _BaseClient.__abstractmethods__ = set()
-    ftp_bc = _BaseClient(username="foo", password="bar", host="baz", port=21)
-    assert ftp_bc.__dict__ == {"connection": None}
+    ftp_bc = _BaseClient(
+        name="foo", username="foo", password="bar", host="baz", port=21
+    )
+    assert ftp_bc.__dict__ == {"connection": None, "name": "FOO"}
     assert ftp_bc._check_dir(dir="foo") is None
     assert ftp_bc._is_file(dir="foo", file_name="bar") is None
     assert ftp_bc.close() is None
@@ -407,7 +409,7 @@ class TestMock_sftpClient:
         with pytest.raises(RetrieverFileError):
             sftp.write_file(file=file_obj, dir="bar", remote=False)
         assert (
-            f"Unable to write {mock_file_info.file_name} to local directory"
+            f"(TEST) Unable to write {mock_file_info.file_name} to local directory"
             in caplog.text
         )
 
@@ -431,6 +433,7 @@ class TestLiveClients:
     def test_ftpClient_live_test(self, live_creds):
         remote_dir = os.environ["LEILA_SRC"]
         live_ftp = _ftpClient(
+            name="LEILA",
             username=os.environ["LEILA_USER"],
             password=os.environ["LEILA_PASSWORD"],
             host=os.environ["LEILA_HOST"],
@@ -453,6 +456,7 @@ class TestLiveClients:
     def test_ftpClient_live_test_auth_error(self, live_creds):
         with pytest.raises(RetrieverAuthenticationError):
             _ftpClient(
+                name="LEILA",
                 username="FOO",
                 password=os.environ["LEILA_PASSWORD"],
                 host=os.environ["LEILA_HOST"],
@@ -462,6 +466,7 @@ class TestLiveClients:
     def test_sftpClient_live_test(self, live_creds):
         remote_dir = os.environ["EASTVIEW_SRC"]
         live_sftp = _sftpClient(
+            name="EASTVIEW",
             username=os.environ["EASTVIEW_USER"],
             password=os.environ["EASTVIEW_PASSWORD"],
             host=os.environ["EASTVIEW_HOST"],
@@ -484,6 +489,7 @@ class TestLiveClients:
     def test_sftpClient_live_test_auth_error(self, live_creds):
         with pytest.raises(RetrieverAuthenticationError):
             _sftpClient(
+                name="EASTVIEW",
                 username="FOO",
                 password=os.environ["EASTVIEW_PASSWORD"],
                 host=os.environ["EASTVIEW_HOST"],
@@ -493,6 +499,7 @@ class TestLiveClients:
     def test_sftpClient_NSDROP(self, live_creds):
         remote_dir = "NSDROP/TEST/vendor_records"
         live_sftp = _sftpClient(
+            name="NSDROP",
             username=os.environ["NSDROP_USER"],
             password=os.environ["NSDROP_PASSWORD"],
             host=os.environ["NSDROP_HOST"],

@@ -55,6 +55,7 @@ class Client:
             case 21 | "21":
                 logger.debug(f"({self.name}) Connecting to {self.host} via FTP client")
                 return _ftpClient(
+                    name=self.name,
                     username=username,
                     password=password,
                     host=self.host,
@@ -63,6 +64,7 @@ class Client:
             case 22 | "22":
                 logger.debug(f"({self.name}) Connecting to {self.host} via SFTP client")
                 return _sftpClient(
+                    name=self.name,
                     username=username,
                     password=password,
                     host=self.host,

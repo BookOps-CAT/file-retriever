@@ -293,6 +293,7 @@ def mock_file_none_type_return(monkeypatch, mock_Client):
 @pytest.fixture
 def stub_creds() -> Dict[str, str]:
     return {
+        "name": "test",
         "host": "ftp.testvendor.com",
         "username": "test_username",
         "password": "test_password",
