@@ -406,19 +406,24 @@ class _sftpClient(_BaseClient):
                 username=username, password=password, host=host, port=int(port)
             )
 
-    def __configure_host_keys(self, host_key_file: str) -> None:
+    def __configure_host_keys(self) -> str:
         """
         Load host keys from file and save to a file to be used by this program.
-        User will be prompted to enter path to file of known_hosts. Host keys
-        will then be saved to a `vendor_hosts` file in the user's `.ssh` directory.
+        Host keys will then be saved to a `vendor_hosts` file in the user's
+        `.ssh` directory.
 
-        Args:
-            host_key_file: path to file containing host keys
-
+        Returns:
+            str: path to `vendor_hosts` file containing host keys
         """
-        ssh = paramiko.SSHClient()
-        ssh.load_host_keys(filename=host_key_file)
-        ssh.save_host_keys(filename=os.path.expanduser("~/.ssh/vendor_hosts"))
+        if os.path.isfile(".ssh/vendor_hosts"):
+            logger.debug(f"({self.name}) Host keys file found in local directory.")
+            return ".ssh/vendor_hosts"
+        else:
+            logger.debug(f"({self.name}) Host keys file not found. Creating new file.")
+            ssh = paramiko.SSHClient()
+            ssh.load_host_keys(filename=os.path.expanduser("~/.ssh/known_hosts"))
+            ssh.save_host_keys(filename=os.path.expanduser("~/.ssh/vendor_hosts"))
+            return os.path.expanduser("~/.ssh/vendor_hosts")
 
     def _connect_to_server(
         self, username: str, password: str, host: str, port: int
@@ -434,15 +439,15 @@ class _sftpClient(_BaseClient):
             paramiko.AuthenticationException: if unable to authenticate with server
 
         """
-        if not os.path.isfile(os.path.expanduser("~/.ssh/vendor_hosts")):
-            logger.debug("Host keys file not found. Creating new file.")
-            file = input("Enter path to host keys file: ")
-            self.__configure_host_keys(host_key_file=file)
+        if os.path.isfile(os.path.expanduser("~/.ssh/vendor_hosts")):
+            key_file = os.path.expanduser("~/.ssh/vendor_hosts")
+
+        else:
+            logger.debug(f"({self.name}) Host keys file not found. Checking config.")
+            key_file = self.__configure_host_keys()
         try:
             ssh = paramiko.SSHClient()
-            ssh.load_system_host_keys(
-                filename=os.path.expanduser("~/.ssh/vendor_hosts")
-            )
+            ssh.load_system_host_keys(filename=key_file)
             ssh.set_missing_host_key_policy(paramiko.WarningPolicy())
             ssh.connect(
                 hostname=host,
