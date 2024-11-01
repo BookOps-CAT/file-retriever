@@ -10,6 +10,11 @@ from file_retriever.connect import Client
 from file_retriever.file import FileInfo
 
 
+@pytest.fixture(autouse=True)
+def set_caplog_level(caplog):
+    caplog.set_level("DEBUG")
+
+
 class FakeUtcNow(datetime.datetime):
     @classmethod
     def now(cls, tz=datetime.timezone.utc):
@@ -143,61 +148,60 @@ class MockSFTPClient:
         return MockStatData().sftp_attr()
 
 
-@pytest.fixture
-def mock_login(monkeypatch, mock_open_file):
-    def mock_stat(*args, **kwargs):
-        return MockStatData()
-
-    def mock_isfile(*args, **kwargs):
-        return True
-
-    def mock_connect(*args, **kwargs):
+class MockSSHClient:
+    def connect(self, *args, **kwargs) -> None:
         pass
 
-    monkeypatch.setattr(os, "stat", mock_stat)
-    monkeypatch.setattr(os.path, "isfile", mock_isfile)
-    monkeypatch.setattr(paramiko.SSHClient, "connect", mock_connect)
-    monkeypatch.setattr(paramiko.SSHClient, "load_system_host_keys", mock_connect)
-    monkeypatch.setattr(paramiko.SSHClient, "open_sftp", MockSFTPClient)
+    def load_host_keys(self, *args, **kwargs) -> None:
+        pass
+
+    def load_system_host_keys(self, *args, **kwargs) -> None:
+        pass
+
+    def open_sftp(self, *args, **kwargs) -> MockSFTPClient:
+        return MockSFTPClient()
+
+    def save_host_keys(self, *args, **kwargs) -> None:
+        pass
+
+    def set_missing_host_key_policy(self, *args, **kwargs) -> None:
+        pass
+
+
+@pytest.fixture
+def mock_login(monkeypatch, mock_open_file):
+    monkeypatch.setattr(os, "stat", lambda *args, **kwargs: MockStatData())
+    monkeypatch.setattr(os.path, "isfile", lambda *args, **kwargs: True)
+    monkeypatch.setattr(paramiko, "SSHClient", MockSSHClient)
     monkeypatch.setattr(datetime, "datetime", FakeUtcNow)
     monkeypatch.setattr(ftplib, "FTP", MockFTP)
 
 
 @pytest.fixture
-def mock_sftp_no_host_keys(monkeypatch, mock_open_file):
+def mock_sftp_no_host_keys(monkeypatch, mock_login):
+    monkeypatch.setattr(os.path, "isfile", lambda *args, **kwargs: False)
+
+
+@pytest.fixture
+def mock_sftp_local_host_keys(monkeypatch, mock_login):
     def mock_isfile(*args, **kwargs):
-        return False
-
-    def mock_connect(*args, **kwargs):
-        pass
-
-    def mock_input(*args, **kwargs):
-        return "testdir"
+        if os.path.expanduser("~/.ssh/vendor_hosts") == args[0]:
+            return False
+        else:
+            return True
 
     monkeypatch.setattr(os.path, "isfile", mock_isfile)
-    monkeypatch.setattr("builtins.input", mock_input)
-    monkeypatch.setattr(paramiko.SSHClient, "load_host_keys", mock_connect)
-    monkeypatch.setattr(paramiko.SSHClient, "save_host_keys", mock_connect)
-    monkeypatch.setattr(paramiko.SSHClient, "load_system_host_keys", mock_connect)
-    monkeypatch.setattr(paramiko.SSHClient, "connect", mock_connect)
-    monkeypatch.setattr(paramiko.SSHClient, "open_sftp", MockSFTPClient)
 
 
 @pytest.fixture
 def mock_Client(monkeypatch, mock_login):
-    def mock_file_exists(*args, **kwargs):
-        return False
-
-    monkeypatch.setattr(Client, "check_file", mock_file_exists)
-    monkeypatch.setattr(os.path, "exists", mock_file_exists)
+    monkeypatch.setattr(Client, "check_file", lambda *args, **kwargs: False)
+    monkeypatch.setattr(os.path, "exists", lambda *args, **kwargs: False)
 
 
 @pytest.fixture
 def mock_Client_file_exists(monkeypatch, mock_login):
-    def path_exists(*args, **kwargs):
-        return True
-
-    monkeypatch.setattr(os.path, "exists", path_exists)
+    monkeypatch.setattr(os.path, "exists", lambda *args, **kwargs: True)
 
 
 @pytest.fixture

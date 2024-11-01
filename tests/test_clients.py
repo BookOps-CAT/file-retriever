@@ -231,10 +231,21 @@ class TestMock_sftpClient:
         sftp = _sftpClient(**stub_creds)
         assert sftp.connection is not None
 
-    def test_sftpClient_no_host_keys(self, mock_sftp_no_host_keys, stub_creds):
+    def test_sftpClient_no_host_keys(self, mock_sftp_no_host_keys, stub_creds, caplog):
         stub_creds["port"] = "22"
         sftp = _sftpClient(**stub_creds)
         assert sftp.connection is not None
+        assert "Host keys file not found. Checking config." in caplog.text
+        assert "Host keys file not found. Creating new file." in caplog.text
+
+    def test_sftpClient_local_host_keys(
+        self, mock_sftp_local_host_keys, stub_creds, caplog
+    ):
+        stub_creds["port"] = "22"
+        sftp = _sftpClient(**stub_creds)
+        assert sftp.connection is not None
+        assert "Host keys file not found. Checking config." in caplog.text
+        assert "Host keys file found in local directory." in caplog.text
 
     def test_sftpClient_no_creds(self, mock_login):
         creds = {}
