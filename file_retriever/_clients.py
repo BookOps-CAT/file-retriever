@@ -415,15 +415,10 @@ class _sftpClient(_BaseClient):
         Returns:
             str: path to `vendor_hosts` file containing host keys
         """
-        if os.path.isfile(".ssh/vendor_hosts"):
-            logger.debug(f"({self.name}) Host keys file found in local directory.")
-            return ".ssh/vendor_hosts"
-        else:
-            logger.debug(f"({self.name}) Host keys file not found. Creating new file.")
-            ssh = paramiko.SSHClient()
-            ssh.load_host_keys(filename=os.path.expanduser("~/.ssh/known_hosts"))
-            ssh.save_host_keys(filename=os.path.expanduser("~/.ssh/vendor_hosts"))
-            return os.path.expanduser("~/.ssh/vendor_hosts")
+        ssh = paramiko.SSHClient()
+        ssh.load_host_keys(filename=os.path.expanduser("~/.ssh/known_hosts"))
+        ssh.save_host_keys(filename=os.path.expanduser("~/.ssh/vendor_hosts"))
+        return os.path.expanduser("~/.ssh/vendor_hosts")
 
     def _connect_to_server(
         self, username: str, password: str, host: str, port: int
@@ -441,9 +436,10 @@ class _sftpClient(_BaseClient):
         """
         if os.path.isfile(os.path.expanduser("~/.ssh/vendor_hosts")):
             key_file = os.path.expanduser("~/.ssh/vendor_hosts")
-
+        elif os.path.isfile(".ssh/vendor_hosts"):
+            key_file = ".ssh/vendor_hosts"
         else:
-            logger.debug(f"({self.name}) Host keys file not found. Checking config.")
+            logger.debug(f"({self.name}) Host keys file not found. Creating new file.")
             key_file = self.__configure_host_keys()
         try:
             ssh = paramiko.SSHClient()
