@@ -37,7 +37,8 @@ with vendor_client as client:
 ### [0.2.0] - 2025-01-13
 #### Added
 + `pyyaml` and `types-pyyaml` to dev dependencies (previously they were project dependencies)
-+ 
++ python 3.13 to unit tests
+
 #### Changed
 + `_ftpClient.get_file_data` and `_ftpClient.list_file_data` so that it first attempts a MLSD command to retrieve file data from the server. An MLSD command retrieves file metadata for an entire directory with one command but FTP servers are not always configured to allow for it. The Backstage FTP server allows for this command and other commands (such as SIZE) are not allowed for zip files such as those that we retrieve from backstage. 
 + `File.__parse_permissions` can now calculate the decimal value of file permissions that are represented in either symbolic or octal notation
