@@ -120,6 +120,18 @@ class TestMock_ftpClient:
         assert file_data.file_gid is None
         assert file_data.file_atime is None
 
+    def test_ftpClient_get_file_data_mlsd(self, mock_ftpClient_mlsd, stub_creds):
+        stub_creds["port"] = "21"
+        ftp = _ftpClient(**stub_creds)
+        file_data = ftp.get_file_data(file_name="foo.mrc", dir="testdir")
+        assert file_data.file_name == "foo.mrc"
+        assert file_data.file_mtime == 1704070800
+        assert file_data.file_size == 140401
+        assert file_data.file_mode == 33188
+        assert file_data.file_uid is None
+        assert file_data.file_gid is None
+        assert file_data.file_atime is None
+
     def test_ftpClient_get_file_data_error(self, mock_file_error, stub_creds):
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
@@ -135,6 +147,20 @@ class TestMock_ftpClient:
             ftp.get_file_data(file_name="foo.mrc", dir="testdir")
 
     def test_ftpClient_list_file_data(self, mock_Client, stub_creds):
+        stub_creds["port"] = "21"
+        ftp = _ftpClient(**stub_creds)
+        files = ftp.list_file_data(dir="testdir")
+        assert all(isinstance(file, FileInfo) for file in files)
+        assert len(files) == 1
+        assert files[0].file_name == "foo.mrc"
+        assert files[0].file_mtime == 1704070800
+        assert files[0].file_size == 140401
+        assert files[0].file_mode == 33188
+        assert files[0].file_uid is None
+        assert files[0].file_gid is None
+        assert files[0].file_atime is None
+
+    def test_ftpClient_list_file_data_mlsd(self, mock_ftpClient_mlsd, stub_creds):
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)
         files = ftp.list_file_data(dir="testdir")
@@ -436,9 +462,64 @@ class TestMock_sftpClient:
         )
 
 
+@pytest.mark.usefixtures("live_creds")
 @pytest.mark.livetest
 class TestLiveClients:
-    def test_ftpClient_live_test(self, live_creds):
+    def test_ftpClient_live_test_backstage(self):
+        remote_dir = os.environ["BACKSTAGE_BPL_SRC"]
+        live_ftp = _ftpClient(
+            name="BACKSTAGE_BPL",
+            username=os.environ["BACKSTAGE_BPL_USER"],
+            password=os.environ["BACKSTAGE_BPL_PASSWORD"],
+            host=os.environ["BACKSTAGE_BPL_HOST"],
+            port=os.environ["BACKSTAGE_BPL_PORT"],
+        )
+        file_list = live_ftp.list_file_data(dir=remote_dir)
+        file_data = live_ftp.get_file_data(
+            file_name="brooklyn_bib_maintenance.d221226.zip", dir=remote_dir
+        )
+        fetched_file = live_ftp.fetch_file(file_data, remote_dir)
+        assert len(file_list) > 1
+        assert file_data.file_size > 1
+        assert isinstance(fetched_file.file_stream, io.BytesIO)
+
+    def test_ftpClient_live_test_bt(self):
+        remote_dir = os.environ["BAKERTAYLOR_BPL_SRC"]
+        live_ftp = _ftpClient(
+            name="BAKERTAYLOR_BPL",
+            username=os.environ["BAKERTAYLOR_BPL_USER"],
+            password=os.environ["BAKERTAYLOR_BPL_PASSWORD"],
+            host=os.environ["BAKERTAYLOR_BPL_HOST"],
+            port=os.environ["BAKERTAYLOR_BPL_PORT"],
+        )
+        file_list = live_ftp.list_file_data(dir=remote_dir)
+        file_data = live_ftp.get_file_data(
+            file_name="20241204_415_303357_L4298473000000.mrc", dir=remote_dir
+        )
+        fetched_file = live_ftp.fetch_file(file_data, remote_dir)
+        assert len(file_list) > 1
+        assert file_data.file_size > 1
+        assert isinstance(fetched_file.file_stream, io.BytesIO)
+
+    def test_ftpClient_live_test_midwest(self):
+        remote_dir = os.environ["MIDWEST_BPL_SRC"]
+        live_ftp = _ftpClient(
+            name="MIDWEST_BPL",
+            username=os.environ["MIDWEST_BPL_USER"],
+            password=os.environ["MIDWEST_BPL_PASSWORD"],
+            host=os.environ["MIDWEST_BPL_HOST"],
+            port=os.environ["MIDWEST_BPL_PORT"],
+        )
+        file_list = live_ftp.list_file_data(dir=remote_dir)
+        file_data = live_ftp.get_file_data(
+            file_name="BKL_ADB_11238M_01092025_24520913130.mrc", dir=remote_dir
+        )
+        fetched_file = live_ftp.fetch_file(file_data, remote_dir)
+        assert len(file_list) > 1
+        assert file_data.file_size > 1
+        assert fetched_file.file_stream.getvalue()[0:1] == b"0"
+
+    def test_ftpClient_live_test_leila(self):
         remote_dir = os.environ["LEILA_SRC"]
         live_ftp = _ftpClient(
             name="LEILA",
@@ -461,7 +542,7 @@ class TestLiveClients:
             stub_creds["port"] = "21"
             _ftpClient(**stub_creds)
 
-    def test_ftpClient_live_test_auth_error(self, live_creds):
+    def test_ftpClient_live_test_auth_error(self):
         with pytest.raises(RetrieverAuthenticationError):
             _ftpClient(
                 name="LEILA",
@@ -471,7 +552,7 @@ class TestLiveClients:
                 port=os.environ["LEILA_PORT"],
             )
 
-    def test_sftpClient_live_test(self, live_creds):
+    def test_sftpClient_live_test(self):
         remote_dir = os.environ["EASTVIEW_SRC"]
         live_sftp = _sftpClient(
             name="EASTVIEW",
@@ -494,7 +575,7 @@ class TestLiveClients:
         with pytest.raises(OSError):
             _sftpClient(**stub_creds)
 
-    def test_sftpClient_live_test_auth_error(self, live_creds):
+    def test_sftpClient_live_test_auth_error(self):
         with pytest.raises(RetrieverAuthenticationError):
             _sftpClient(
                 name="EASTVIEW",
@@ -504,7 +585,7 @@ class TestLiveClients:
                 port=os.environ["EASTVIEW_PORT"],
             )
 
-    def test_sftpClient_NSDROP(self, live_creds):
+    def test_sftpClient_NSDROP(self):
         remote_dir = "NSDROP/TEST/vendor_records"
         live_sftp = _sftpClient(
             name="NSDROP",

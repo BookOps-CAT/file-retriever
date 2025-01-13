@@ -132,6 +132,8 @@ def test_FileInfo_parse_mdtm_time(str_time, mtime):
             33279,
         ),
         ("-r--------", 33024),
+        ("100644", 33188),
+        ("100777", 33279),
     ],
 )
 def test_FileInfo_parse_permissions(str_permissions, decimal_permissions):

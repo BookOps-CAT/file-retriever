@@ -137,19 +137,27 @@ class FileInfo:
     def __parse_permissions(self, file_mode: str) -> int:
         """
         parse permissions written as string in symbolic notation
-        (eg. -rwxrwxrwx) to decimal value.
+        (eg. -rwxrwxrwx) or octal notation (eg. 100777) to decimal value.
 
         file_mode:
-            a 10 character string representing the permissions associated with
-            a file. The first character represents the file type, the next 9
+            a 6-10 character string representing the permissions associated with
+            a file. The first character represents the file type, the next 5-9
             characters represent the owner, group, and public permissions.
+
+            If the file_mode is in symbolic notation, the string needs to be parsed
+            before using the resulting integers to calculate the decimal value. If
+            the file_mode is in octal notation then string can be used as is.
+
+            octal notation:
+                eg. 100764
+
+            symbolic notation:
                 eg. '-rwxrw-r--'
             this string is parsed calculate the file's permission mode in
             decimal notation using the following formula:
                 digit 1 (filetype):
                     the first character is converted to an octal value based
                     on the type:
-                        d -> 4 (directory)
                         - -> 1 (file)
                 digits 2-10 (permissions by group):
                     within each group (2-4: owner, 5-7: group, and 8-10: public),
@@ -160,30 +168,40 @@ class FileInfo:
                         - -> 0 (no permission)
                     the octal values for each group of 3 characters are then added
                         'rwxrwxrwx' -> '(4+2+1) (4+2+1) (4+2+1)' -> 777
-                the octal values of the file type and permissions are then converted
-                to a decimal value using the following formula:
-                    (filetype * 8^5) + (0 * 8^4) + (0 * 8^3) + (owner * 8^2) +
-                    (group * 8^1) + (others * 8^0) = decimal value
+
+            calculation:
+                the octal value is then converted to a decimal value using the
+                following formula:
+                    (digit 1 * 8^5) + (digit 2 * 8^4) + (digit 3 * 8^3) +
+                    (digit 4 (ie. owner) * 8^2) + (digit 5 (ie.group) * 8^1) +
+                    (digit 4 (ie. public) * 8^0) = decimal value
                     example:
                         '-rwxrw-r--' -> 100764
                         (1 * 8^5) + (0 * 8^4) + (0 * 8^3) +
                         (7 * 8^2) + (6 * 8^1) + (4 * 8^0) = 33264
         """
-        file_type = file_mode[0].replace("d", "4").replace("-", "1")
-        file_perm = (
-            file_mode[1:10]
-            .replace("-", "0")
-            .replace("r", "4")
-            .replace("w", "2")
-            .replace("x", "1")
-        )
+        if file_mode.isnumeric():
+            file_perm = file_mode
+        else:
+            file_type = file_mode[0].replace("-", "1")
+            classes = (
+                file_mode[1:10]
+                .replace("-", "0")
+                .replace("r", "4")
+                .replace("w", "2")
+                .replace("x", "1")
+            )
+            owner = int(classes[0]) + int(classes[1]) + int(classes[2])
+            group = int(classes[3]) + int(classes[4]) + int(classes[5])
+            public = int(classes[6]) + int(classes[7]) + int(classes[8])
+            file_perm = f"{file_type}00{owner}{group}{public}"
         return (
-            (int(file_type) * 8**5)
-            + (0 * 8**4)
-            + (0 * 8**3)
-            + (int(int(file_perm[0]) + int(file_perm[1]) + int(file_perm[2])) * 8**2)
-            + (int(int(file_perm[3]) + int(file_perm[4]) + int(file_perm[5])) * 8**1)
-            + (int(int(file_perm[6]) + int(file_perm[7]) + int(file_perm[8])) * 8**0)
+            (int(file_perm[0]) * 8**5)
+            + (int(file_perm[1]) * 8**4)
+            + (int(file_perm[2]) * 8**3)
+            + (int(file_perm[3]) * 8**2)
+            + (int(file_perm[4]) * 8**1)
+            + (int(file_perm[5]) * 8**0)
         )
 
 
