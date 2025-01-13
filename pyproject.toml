@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "file-retriever"
-version = "0.1.0"
+version = "0.2.0"
 description = "BookOps file retriever for FTP/SFTP servers"
 authors = ["Charlotte Kostelic <charlottekostelic@gmail.com>"]
 license = "MIT"
