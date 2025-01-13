@@ -82,6 +82,9 @@ class MockFTP:
     def login(self, *args, **kwargs) -> None:
         pass
 
+    def mlsd(self, *args, **kwargs) -> tuple:
+        raise ftplib.error_perm
+
     def nlst(self, *args, **kwargs) -> List[str]:
         return [MockStatData().file_name]
 
@@ -202,6 +205,26 @@ def mock_Client(monkeypatch, mock_login):
 @pytest.fixture
 def mock_Client_file_exists(monkeypatch, mock_login):
     monkeypatch.setattr(os.path, "exists", lambda *args, **kwargs: True)
+
+
+@pytest.fixture
+def mock_ftpClient_mlsd(monkeypatch, mock_Client):
+    def mock_mlsd(*args, **kwargs):
+        name = MockStatData().file_name
+        data = {
+            "size": MockStatData().st_size,
+            "type": "file",
+            "modify": MockStatData().st_mtime,
+            "unix.mode": "0644",
+        }
+        return [
+            (
+                name,
+                data,
+            )
+        ]
+
+    monkeypatch.setattr(MockFTP, "mlsd", mock_mlsd)
 
 
 @pytest.fixture

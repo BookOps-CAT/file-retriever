@@ -205,12 +205,16 @@ class _ftpClient(_BaseClient):
 
     def get_file_data(self, file_name: str, dir: str) -> FileInfo:
         """
-        Retrieves metadata for file on server. Requires multiple
-        calls to server to retrieve file size, modification time,
-        and permissions.
+        Retrieves metadata for file on server. First an MLSD command is
+        attempted to get file size, modification time, and file permissions
+        with a single call to the server. If the server is not configured to
+        allow for MLSD commands, it will return a 5xx response and ftplib will
+        raise an ftplib.error_perm exception. In this case separate calls to
+        the server to get a file's size, modification time, and permissions
+        will be attempted.
 
-        The Baker & Taylor server does not provide the same amount
-        of metadata as other servers so file permissions are not retrieved.
+        Some servers (such as Baker & Taylor's) are not configured for MLSD
+        commands nor do they provide file permissions metadata.
 
         Args:
             file_name: name of file to retrieve metadata for
@@ -221,9 +225,20 @@ class _ftpClient(_BaseClient):
 
         Raises:
             ftplib.error_perm:
-                if unable to retrieve file data due to permissions error
+                if unable to retrieve file data due to problem with server
+                configuration
         """
         current_dir = self.connection.pwd()
+        try:
+            dir_data = {i[0]: i[1] for i in self.connection.mlsd(dir)}
+            return FileInfo(
+                file_name=file_name,
+                file_size=int(dir_data[file_name]["size"]),
+                file_mtime=dir_data[file_name]["modify"],
+                file_mode=f"10{dir_data[file_name]['unix.mode']}",
+            )
+        except ftplib.error_perm:
+            pass
         try:
             self._check_dir(dir)
 
@@ -231,7 +246,7 @@ class _ftpClient(_BaseClient):
 
             def get_file_permissions(data):
                 nonlocal permissions
-                if "baker-taylor" not in self.connection.host:
+                if all(i in ["-", "r", "w", "x"] for i in data[0:10]):
                     permissions = data[0:10]
 
             self.connection.retrlines(f"LIST {file_name}", get_file_permissions)
@@ -272,6 +287,12 @@ class _ftpClient(_BaseClient):
         that is actually a directory, the file will be skipped and not
         included in the returned list.
 
+        First an MLSD command is attempted to get file size, modification time,
+        and file permissions with a single call to the server. If the server is
+        not configured to allow for MLSD commands, it will return a 5xx response,
+        ftplib will raise an ftplib.error_perm exception, and separate commands will
+        be attempted.
+
         Args:
             dir: directory on server to interact with
 
@@ -281,17 +302,30 @@ class _ftpClient(_BaseClient):
 
         Raises:
             ftplib.error_perm:
-                if unable to list file data due to permissions error
+                if unable to list file data due to problem with server configuration
 
         """
         files = []
         current_dir = self.connection.pwd()
         try:
+            dir_data = {i[0]: i[1] for i in self.connection.mlsd(dir)}
+            return [
+                FileInfo(
+                    file_name=k,
+                    file_size=int(v["size"]),
+                    file_mtime=v["modify"],
+                    file_mode=f"10{v['unix.mode']}",
+                )
+                for k, v in dir_data.items()
+                if v["type"] == "file"
+            ]
+        except ftplib.error_perm:
+            pass
+        try:
             file_names = self.connection.nlst(dir)
             for name in file_names:
                 file_base_name = os.path.basename(name)
-                file_obj = self._is_file(dir, file_base_name)
-                if file_obj is True:
+                if self._is_file(dir, file_base_name) is True:
                     file_info = self.get_file_data(file_name=file_base_name, dir=dir)
                     files.append(file_info)
                 self._check_dir(current_dir)
