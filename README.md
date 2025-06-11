@@ -13,7 +13,7 @@ python -m pip install git+https://github.com/BookOps-CAT/file-retriever
 Python 3.9 and up.
 
 ## Version
-> 0.2.0
+> 0.3.0
 
 ## Usage
 ```python
@@ -34,6 +34,11 @@ with vendor_client as client:
 ```
 
 ## Changelog
+### [0.3.0] - 2025-06-11
+#### Changed
++ `Client.put_file()` no longer accepts `check` boolean arg.  
++ updated `coverage`
+
 ### [0.2.0] - 2025-01-13
 #### Added
 + `pyyaml` and `types-pyyaml` to dev dependencies (previously they were project dependencies)
@@ -46,5 +51,5 @@ with vendor_client as client:
 
 
 
-
+[0.3.0]: https://github.com/BookOps-CAT/file-retriever/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/BookOps-CAT/file-retriever/compare/v0.1.0...v0.2.0
