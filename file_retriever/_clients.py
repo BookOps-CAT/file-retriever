@@ -111,10 +111,9 @@ class _ftpClient(_BaseClient):
 
         """
         self.name = name.upper()
-        if port in [21, "21"]:
-            self.connection: ftplib.FTP = self._connect_to_server(
-                username=username, password=password, host=host, port=int(port)
-            )
+        self.connection: ftplib.FTP = self._connect_to_server(
+            username=username, password=password, host=host, port=int(port)
+        )
 
     def _connect_to_server(
         self, username: str, password: str, host: str, port: int
@@ -437,10 +436,9 @@ class _sftpClient(_BaseClient):
 
         """
         self.name = name.upper()
-        if port in [22, "22"]:
-            self.connection: paramiko.SFTPClient = self._connect_to_server(
-                username=username, password=password, host=host, port=int(port)
-            )
+        self.connection: paramiko.SFTPClient = self._connect_to_server(
+            username=username, password=password, host=host, port=int(port)
+        )
 
     def __configure_host_keys(self) -> str:
         """
