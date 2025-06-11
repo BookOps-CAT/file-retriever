@@ -1,16 +1,13 @@
-[tool.poetry]
+[project]
 name = "file-retriever"
-version = "0.2.0"
+version = "0.3.0"
 description = "BookOps file retriever for FTP/SFTP servers"
-authors = ["Charlotte Kostelic <charlottekostelic@gmail.com>"]
+authors = [{name = "Charlotte Kostelic", email = "charlottekostelic@bookops.org"}]
 license = "MIT"
 readme = "README.md"
+requires-python = ">=3.10, <4.0"
+dependencies = ["paramiko (>=3.4.0, <3.5.0)", "types-paramiko (>=3.5.0.20240928, <3.6.0)"]
 
-
-[tool.poetry.dependencies]
-python = "^3.10"
-paramiko = "^3.4.0"
-types-paramiko = "^3.5.0.20240928"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -26,11 +23,13 @@ testpaths = ["tests"]
 markers = [
     "livetest: mark a test as hitting a live ftp/sftp server",
 ]
+addopts = '-m "not livetest" --cov=file_retriever/'
 
 
 [tool.coverage.run]
 relative_files = true
 source = ["."]
+omit = ["tests/*"]
 
 
 [build-system]
