@@ -5,10 +5,11 @@ sftp client to interact with remote storage.
 
 import logging
 import os
-from typing import List, Optional, Union
+from typing import List, Union
+
 from file_retriever._clients import _ftpClient, _sftpClient
-from file_retriever.file import FileInfo, File
 from file_retriever.errors import RetrieverFileError
+from file_retriever.file import File, FileInfo
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +160,7 @@ class Client:
             return self.session.get_file_data(file_name=file_name, dir=remote_dir)
         except RetrieverFileError as e:
             logger.error(
-                f"({self.name}) Unable to retrieve file data for {file_name}: " f"{e}"
+                f"({self.name}) Unable to retrieve file data for {file_name}: {e}"
             )
             raise e
 
@@ -202,13 +203,7 @@ class Client:
         """
         return self.session.list_file_names(dir=remote_dir)
 
-    def put_file(
-        self,
-        file: File,
-        dir: str,
-        remote: bool,
-        check: bool,
-    ) -> Optional[FileInfo]:
+    def put_file(self, file: File, dir: str, remote: bool) -> FileInfo:
         """
         Writes file to directory.
 
@@ -222,22 +217,9 @@ class Client:
 
                 If True, then file is written to `dir` on server.
                 If False, then file is written to local `dir` directory.
-            check:
-                bool indicating if directory should be checked before writing file.
-
-                If True, then `dir` will be checked for files matching the file_name
-                and file_size of `file` before writing to `dir`. If a match is found
-                then `file` will not be written.
 
         Returns:
             `FileInfo` objects representing written file
         """
-        if check and self.check_file(file=file, dir=dir, remote=remote) is True:
-            logger.debug(
-                f"({self.name}) {file.file_name} already exists in `{dir}`. "
-                f"Skipping copy."
-            )
-            return None
-        else:
-            logger.debug(f"({self.name}) Writing {file.file_name} to `{dir}`")
-            return self.session.write_file(file=file, dir=dir, remote=remote)
+        logger.debug(f"({self.name}) Writing {file.file_name} to `{dir}`")
+        return self.session.write_file(file=file, dir=dir, remote=remote)

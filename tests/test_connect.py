@@ -1,14 +1,15 @@
 import io
-import logging
 import os
+
 import pytest
-from file_retriever.connect import Client
+
 from file_retriever._clients import _ftpClient, _sftpClient
-from file_retriever.file import FileInfo, File
+from file_retriever.connect import Client
 from file_retriever.errors import (
-    RetrieverFileError,
     RetrieverAuthenticationError,
+    RetrieverFileError,
 )
+from file_retriever.file import File, FileInfo
 
 
 class TestMockClient:
@@ -222,8 +223,8 @@ class TestMockClient:
         connect = Client(**stub_Client_creds)
         file = mock_file_info
         file.file_stream = io.BytesIO(b"0")
-        local_file = connect.put_file(file=file, dir="bar", remote=False, check=check)
-        remote_file = connect.put_file(file=file, dir="bar", remote=True, check=check)
+        local_file = connect.put_file(file=file, dir="bar", remote=False)
+        remote_file = connect.put_file(file=file, dir="bar", remote=True)
         assert remote_file.file_mtime == 1704070800
         assert local_file.file_mtime == 1704070800
 
@@ -235,7 +236,7 @@ class TestMockClient:
         connect = Client(**stub_Client_creds)
         mock_file_info.file_stream = io.BytesIO(b"0")
         with pytest.raises(RetrieverFileError):
-            connect.put_file(file=mock_file_info, dir="bar", remote=True, check=False)
+            connect.put_file(file=mock_file_info, dir="bar", remote=True)
 
     @pytest.mark.parametrize("port", [21, 22])
     def test_Client_put_file_local_error(
@@ -245,30 +246,7 @@ class TestMockClient:
         connect = Client(**stub_Client_creds)
         mock_file_info.file_stream = io.BytesIO(b"0")
         with pytest.raises(RetrieverFileError):
-            connect.put_file(file=mock_file_info, dir="bar", remote=False, check=False)
-
-    @pytest.mark.parametrize(
-        "port, remote",
-        [(21, True), (21, False), (22, True), (22, False)],
-    )
-    def test_Client_put_file_exists(
-        self,
-        mock_Client_file_exists,
-        mock_file_info,
-        stub_Client_creds,
-        caplog,
-        port,
-        remote,
-    ):
-        caplog.set_level(logging.DEBUG)
-        stub_Client_creds["port"] = port
-        connect = Client(**stub_Client_creds)
-        mock_file_info.file_stream = io.BytesIO(b"0")
-        connect.put_file(file=mock_file_info, dir="bar", remote=remote, check=True)
-        assert (
-            f"{mock_file_info.file_name} already exists in `bar`. Skipping copy."
-            in caplog.text
-        )
+            connect.put_file(file=mock_file_info, dir="bar", remote=False)
 
 
 @pytest.mark.livetest
