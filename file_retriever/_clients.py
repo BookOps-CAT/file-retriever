@@ -5,20 +5,22 @@ Can be used within `Client` class to connect to vendor servers or internal
 network drives.
 """
 
-from abc import ABC, abstractmethod
 import ftplib
 import io
 import logging
 import os
-import paramiko
 import stat
+from abc import ABC, abstractmethod
 from typing import Union
-from file_retriever.file import FileInfo, File
+
+import paramiko
+
 from file_retriever.errors import (
-    RetrieverFileError,
-    RetrieverConnectionError,
     RetrieverAuthenticationError,
+    RetrieverConnectionError,
+    RetrieverFileError,
 )
+from file_retriever.file import File, FileInfo
 
 logger = logging.getLogger(__name__)
 
@@ -109,10 +111,9 @@ class _ftpClient(_BaseClient):
 
         """
         self.name = name.upper()
-        if port in [21, "21"]:
-            self.connection: ftplib.FTP = self._connect_to_server(
-                username=username, password=password, host=host, port=int(port)
-            )
+        self.connection: ftplib.FTP = self._connect_to_server(
+            username=username, password=password, host=host, port=int(port)
+        )
 
     def _connect_to_server(
         self, username: str, password: str, host: str, port: int
@@ -435,10 +436,9 @@ class _sftpClient(_BaseClient):
 
         """
         self.name = name.upper()
-        if port in [22, "22"]:
-            self.connection: paramiko.SFTPClient = self._connect_to_server(
-                username=username, password=password, host=host, port=int(port)
-            )
+        self.connection: paramiko.SFTPClient = self._connect_to_server(
+            username=username, password=password, host=host, port=int(port)
+        )
 
     def __configure_host_keys(self) -> str:
         """
