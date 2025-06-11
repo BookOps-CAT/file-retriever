@@ -5,20 +5,22 @@ Can be used within `Client` class to connect to vendor servers or internal
 network drives.
 """
 
-from abc import ABC, abstractmethod
 import ftplib
 import io
 import logging
 import os
-import paramiko
 import stat
+from abc import ABC, abstractmethod
 from typing import Union
-from file_retriever.file import FileInfo, File
+
+import paramiko
+
 from file_retriever.errors import (
-    RetrieverFileError,
-    RetrieverConnectionError,
     RetrieverAuthenticationError,
+    RetrieverConnectionError,
+    RetrieverFileError,
 )
+from file_retriever.file import File, FileInfo
 
 logger = logging.getLogger(__name__)
 
