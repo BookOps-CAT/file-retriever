@@ -2,7 +2,7 @@
 name = "file-retriever"
 version = "0.2.0"
 description = "BookOps file retriever for FTP/SFTP servers"
-authors = ["Charlotte Kostelic <charlottekostelic@gmail.com>"]
+authors = ["Charlotte Kostelic <charlottekostelic@bookops.org>"]
 license = "MIT"
 readme = "README.md"
 
