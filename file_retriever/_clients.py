@@ -30,8 +30,8 @@ class _BaseClient(ABC):
 
     @abstractmethod
     def __init__(
-        self, name, username: str, password: str, host: str, port: Union[str, int]
-    ):
+        self, name: str, username: str, password: str, host: str, port: Union[str, int]
+    ) -> None:
         self.name = name.upper()
         self.connection: Union[ftplib.FTP, paramiko.SFTPClient] = (
             self._connect_to_server(
@@ -41,11 +41,7 @@ class _BaseClient(ABC):
 
     @abstractmethod
     def _connect_to_server(
-        self,
-        username: str,
-        password: str,
-        host: str,
-        port: int,
+        self, username: str, password: str, host: str, port: int
     ) -> Union[ftplib.FTP, paramiko.SFTPClient]:
         pass
 
@@ -93,13 +89,8 @@ class _ftpClient(_BaseClient):
     """
 
     def __init__(
-        self,
-        name: str,
-        username: str,
-        password: str,
-        host: str,
-        port: Union[str, int],
-    ):
+        self, name: str, username: str, password: str, host: str, port: Union[str, int]
+    ) -> None:
         """Initializes client instance.
 
         Args:
@@ -132,10 +123,7 @@ class _ftpClient(_BaseClient):
             ftp_client = ftplib.FTP()
             ftp_client.connect(host=host, port=port)
             ftp_client.encoding = "utf-8"
-            ftp_client.login(
-                user=username,
-                passwd=password,
-            )
+            ftp_client.login(user=username, passwd=password)
             return ftp_client
         except ftplib.error_perm as e:
             logger.error(
@@ -245,7 +233,7 @@ class _ftpClient(_BaseClient):
 
             permissions = None
 
-            def get_file_permissions(data):
+            def get_file_permissions(data: str) -> None:
                 nonlocal permissions
                 if all(i in ["-", "r", "w", "x"] for i in data[0:10]):
                     permissions = data[0:10]
@@ -418,13 +406,8 @@ class _sftpClient(_BaseClient):
     """
 
     def __init__(
-        self,
-        name: str,
-        username: str,
-        password: str,
-        host: str,
-        port: Union[str, int],
-    ):
+        self, name: str, username: str, password: str, host: str, port: Union[str, int]
+    ) -> None:
         """Initializes client instance.
 
         Args:
@@ -479,12 +462,7 @@ class _sftpClient(_BaseClient):
             ssh = paramiko.SSHClient()
             ssh.load_system_host_keys(filename=key_file)
             ssh.set_missing_host_key_policy(paramiko.WarningPolicy())
-            ssh.connect(
-                hostname=host,
-                port=port,
-                username=username,
-                password=password,
-            )
+            ssh.connect(hostname=host, port=port, username=username, password=password)
             sftp_client = ssh.open_sftp()
             return sftp_client
         except paramiko.AuthenticationException as e:
@@ -515,7 +493,7 @@ class _sftpClient(_BaseClient):
         else:
             return False
 
-    def close(self):
+    def close(self) -> None:
         """Closes connection to server."""
         self.connection.close()
 
@@ -656,8 +634,7 @@ class _sftpClient(_BaseClient):
             try:
                 self._check_dir(dir)
                 written_file = self.connection.putfo(
-                    file.file_stream,
-                    remotepath=file.file_name,
+                    file.file_stream, remotepath=file.file_name
                 )
                 return FileInfo.from_stat_data(written_file, file_name=file.file_name)
             except OSError as e:

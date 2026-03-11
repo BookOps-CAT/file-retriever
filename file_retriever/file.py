@@ -3,8 +3,9 @@
 import datetime
 import io
 import os
-import paramiko
 from typing import Optional, Union
+
+import paramiko
 
 
 class FileInfo:
@@ -19,7 +20,7 @@ class FileInfo:
         file_uid: Optional[int] = None,
         file_gid: Optional[int] = None,
         file_atime: Optional[float] = None,
-    ):
+    ) -> None:
         """Initialize `FileInfo` object with file metadata.
 
         File metadata includes attributes included in `os.stat_result` and
@@ -79,13 +80,17 @@ class FileInfo:
         match data, file_name:
             case data, file_name if file_name is not None:
                 file_name = file_name
-            case data, None if isinstance(data, paramiko.SFTPAttributes) and hasattr(
-                data, "filename"
-            ) and data.filename is not None:
+            case data, None if (
+                isinstance(data, paramiko.SFTPAttributes)
+                and hasattr(data, "filename")
+                and data.filename is not None
+            ):
                 file_name = data.filename
-            case data, None if isinstance(data, paramiko.SFTPAttributes) and hasattr(
-                data, "longname"
-            ) and data.longname is not None:
+            case data, None if (
+                isinstance(data, paramiko.SFTPAttributes)
+                and hasattr(data, "longname")
+                and data.longname is not None
+            ):
                 file_name = data.longname[56:]
             case _:
                 raise AttributeError("No filename provided")
@@ -93,11 +98,12 @@ class FileInfo:
         match data.st_mode:
             case data.st_mode if isinstance(data.st_mode, int):
                 st_mode: Union[str, int] = data.st_mode
-            case data.st_mode if isinstance(
-                data, paramiko.SFTPAttributes
-            ) and data.st_mode is None and hasattr(
-                data, "longname"
-            ) and data.longname is not None:
+            case data.st_mode if (
+                isinstance(data, paramiko.SFTPAttributes)
+                and data.st_mode is None
+                and hasattr(data, "longname")
+                and data.longname is not None
+            ):
                 st_mode = data.longname[0:10]
             case _:
                 raise AttributeError("No file mode provided")
@@ -218,7 +224,7 @@ class File(FileInfo):
         file_uid: Optional[int] = None,
         file_gid: Optional[int] = None,
         file_atime: Optional[float] = None,
-    ):
+    ) -> None:
         """Initialize `File` object with file metadata and data stream.
 
         File metadata includes attributes inherited from `FileInfo` class.

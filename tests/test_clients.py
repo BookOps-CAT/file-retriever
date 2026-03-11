@@ -1,15 +1,17 @@
-from contextlib import nullcontext as does_not_raise
 import io
 import logging
 import os
+from contextlib import nullcontext as does_not_raise
+
 import pytest
-from file_retriever._clients import _ftpClient, _sftpClient, _BaseClient
-from file_retriever.file import FileInfo, File
+
+from file_retriever._clients import _BaseClient, _ftpClient, _sftpClient
 from file_retriever.errors import (
-    RetrieverFileError,
-    RetrieverConnectionError,
     RetrieverAuthenticationError,
+    RetrieverConnectionError,
+    RetrieverFileError,
 )
+from file_retriever.file import File, FileInfo
 
 
 def test_BaseClient(mock_file_info):

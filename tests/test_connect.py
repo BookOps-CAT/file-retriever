@@ -5,29 +5,14 @@ import pytest
 
 from file_retriever._clients import _ftpClient, _sftpClient
 from file_retriever.connect import Client
-from file_retriever.errors import (
-    RetrieverAuthenticationError,
-    RetrieverFileError,
-)
+from file_retriever.errors import RetrieverAuthenticationError, RetrieverFileError
 from file_retriever.file import File, FileInfo
 
 
 class TestMockClient:
     """Test Client with mock responses."""
 
-    @pytest.mark.parametrize(
-        "port, client_type",
-        [
-            (
-                21,
-                _ftpClient,
-            ),
-            (
-                22,
-                _sftpClient,
-            ),
-        ],
-    )
+    @pytest.mark.parametrize("port, client_type", [(21, _ftpClient), (22, _sftpClient)])
     def test_Client(self, mock_Client, stub_Client_creds, port, client_type):
         stub_Client_creds["port"] = port
         connect = Client(**stub_Client_creds)
@@ -42,38 +27,26 @@ class TestMockClient:
             Client(**stub_Client_creds)
         assert f"Invalid port number: {stub_Client_creds['port']}" in str(e)
 
-    @pytest.mark.parametrize(
-        "port",
-        [21, 22],
-    )
+    @pytest.mark.parametrize("port", [21, 22])
     def test_Client_context_manager(self, mock_Client, stub_Client_creds, port):
         stub_Client_creds["port"] = port
         with Client(**stub_Client_creds) as connect:
             assert connect.session is not None
 
-    @pytest.mark.parametrize(
-        "port",
-        [21, 22],
-    )
+    @pytest.mark.parametrize("port", [21, 22])
     def test_Client_auth_error(self, mock_Client_auth_error, stub_Client_creds, port):
         stub_Client_creds["port"] = port
         with pytest.raises(RetrieverAuthenticationError):
             Client(**stub_Client_creds)
 
-    @pytest.mark.parametrize(
-        "port",
-        [21, 22],
-    )
+    @pytest.mark.parametrize("port", [21, 22])
     def test_Client_check_connection_active(self, mock_Client, stub_Client_creds, port):
         stub_Client_creds["port"] = port
         connect = Client(**stub_Client_creds)
         live_connection = connect.check_connection()
         assert live_connection is True
 
-    @pytest.mark.parametrize(
-        "port",
-        [21, 22],
-    )
+    @pytest.mark.parametrize("port", [21, 22])
     def test_Client_check_connection_inactive(
         self, mock_Client_connection_dropped, stub_Client_creds, port
     ):
@@ -82,10 +55,7 @@ class TestMockClient:
         live_connection = connect.check_connection()
         assert live_connection is False
 
-    @pytest.mark.parametrize(
-        "port",
-        [21, 22],
-    )
+    @pytest.mark.parametrize("port", [21, 22])
     def test_Client_check_file_true(
         self, mock_Client_file_exists, stub_Client_creds, port, mock_file_info
     ):
@@ -105,10 +75,7 @@ class TestMockClient:
         file_exists = connect.check_file(file=mock_file_info, dir="bar", remote=True)
         assert file_exists is False
 
-    @pytest.mark.parametrize(
-        "port",
-        [21, 22],
-    )
+    @pytest.mark.parametrize("port", [21, 22])
     def test_Client_get_file(
         self, mock_Client, mock_file_info, stub_Client_creds, port
     ):
@@ -213,16 +180,14 @@ class TestMockClient:
             connect.list_files(remote_dir="testdir")
 
     @pytest.mark.parametrize(
-        "port, check",
-        [(21, True), (21, False), (22, True), (22, False)],
+        "port, check", [(21, True), (21, False), (22, True), (22, False)]
     )
     def test_Client_put_file(
         self, mock_Client, mock_file_info, stub_Client_creds, port, check
     ):
         stub_Client_creds["port"] = port
         connect = Client(**stub_Client_creds)
-        file = mock_file_info
-        file.file_stream = io.BytesIO(b"0")
+        file = File.from_fileinfo(file=mock_file_info, file_stream=io.BytesIO(b"0"))
         local_file = connect.put_file(file=file, dir="bar", remote=False)
         remote_file = connect.put_file(file=file, dir="bar", remote=True)
         assert remote_file.file_mtime == 1704070800

@@ -3,6 +3,8 @@ This module contains the `Client` class which can be used to create an ftp or
 sftp client to interact with remote storage.
 """
 
+from __future__ import annotations
+
 import logging
 import os
 from typing import List, Union
@@ -22,13 +24,8 @@ class Client:
     """
 
     def __init__(
-        self,
-        name: str,
-        username: str,
-        password: str,
-        host: str,
-        port: Union[str, int],
-    ):
+        self, name: str, username: str, password: str, host: str, port: Union[str, int]
+    ) -> None:
         """Initializes client instance.
 
         Args:
@@ -77,7 +74,7 @@ class Client:
                 )
                 raise ValueError(f"Invalid port number: {self.port}")
 
-    def __enter__(self, *args):
+    def __enter__(self, *args: tuple) -> Client:
         """
         Allows for use of context manager with `Client` class.
 
@@ -85,7 +82,7 @@ class Client:
         """
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: tuple) -> None:
         """
         Allows for use of context manager with `Client` class.
 
@@ -93,7 +90,7 @@ class Client:
         """
         self.close()
 
-    def close(self):
+    def close(self) -> None:
         """Closes connection"""
         self.session.close()
         logger.debug(f"({self.name}) Client session closed")
