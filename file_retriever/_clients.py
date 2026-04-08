@@ -5,20 +5,21 @@ Can be used within `Client` class to connect to vendor servers or internal
 network drives.
 """
 
-from abc import ABC, abstractmethod
 import ftplib
 import io
 import logging
 import os
-import paramiko
 import stat
-from typing import Union
-from file_retriever.file import FileInfo, File
+from abc import ABC, abstractmethod
+
+import paramiko
+
 from file_retriever.errors import (
-    RetrieverFileError,
-    RetrieverConnectionError,
     RetrieverAuthenticationError,
+    RetrieverConnectionError,
+    RetrieverFileError,
 )
+from file_retriever.file import File, FileInfo
 
 logger = logging.getLogger(__name__)
 
@@ -28,23 +29,17 @@ class _BaseClient(ABC):
 
     @abstractmethod
     def __init__(
-        self, name, username: str, password: str, host: str, port: Union[str, int]
-    ):
+        self, name: str, username: str, password: str, host: str, port: str | int
+    ) -> None:
         self.name = name.upper()
-        self.connection: Union[ftplib.FTP, paramiko.SFTPClient] = (
-            self._connect_to_server(
-                username=username, password=password, host=host, port=int(port)
-            )
+        self.connection: ftplib.FTP | paramiko.SFTPClient = self._connect_to_server(
+            username=username, password=password, host=host, port=int(port)
         )
 
     @abstractmethod
     def _connect_to_server(
-        self,
-        username: str,
-        password: str,
-        host: str,
-        port: int,
-    ) -> Union[ftplib.FTP, paramiko.SFTPClient]:
+        self, username: str, password: str, host: str, port: int
+    ) -> ftplib.FTP | paramiko.SFTPClient:
         pass
 
     @abstractmethod
@@ -91,13 +86,8 @@ class _ftpClient(_BaseClient):
     """
 
     def __init__(
-        self,
-        name: str,
-        username: str,
-        password: str,
-        host: str,
-        port: Union[str, int],
-    ):
+        self, name: str, username: str, password: str, host: str, port: str | int
+    ) -> None:
         """Initializes client instance.
 
         Args:
@@ -109,10 +99,9 @@ class _ftpClient(_BaseClient):
 
         """
         self.name = name.upper()
-        if port in [21, "21"]:
-            self.connection: ftplib.FTP = self._connect_to_server(
-                username=username, password=password, host=host, port=int(port)
-            )
+        self.connection: ftplib.FTP = self._connect_to_server(
+            username=username, password=password, host=host, port=int(port)
+        )
 
     def _connect_to_server(
         self, username: str, password: str, host: str, port: int
@@ -131,10 +120,7 @@ class _ftpClient(_BaseClient):
             ftp_client = ftplib.FTP()
             ftp_client.connect(host=host, port=port)
             ftp_client.encoding = "utf-8"
-            ftp_client.login(
-                user=username,
-                passwd=password,
-            )
+            ftp_client.login(user=username, passwd=password)
             return ftp_client
         except ftplib.error_perm as e:
             logger.error(
@@ -242,14 +228,6 @@ class _ftpClient(_BaseClient):
         try:
             self._check_dir(dir)
 
-            permissions = None
-
-            def get_file_permissions(data):
-                nonlocal permissions
-                if all(i in ["-", "r", "w", "x"] for i in data[0:10]):
-                    permissions = data[0:10]
-
-            self.connection.retrlines(f"LIST {file_name}", get_file_permissions)
             size = self.connection.size(file_name)
             time = self.connection.voidcmd(f"MDTM {file_name}")
             if size is None or time is None:
@@ -259,10 +237,7 @@ class _ftpClient(_BaseClient):
                 raise RetrieverFileError
             self._check_dir(current_dir)
             return FileInfo(
-                file_name=file_name,
-                file_size=size,
-                file_mtime=time[4:],
-                file_mode=permissions,
+                file_name=file_name, file_size=size, file_mtime=time[4:], file_mode=None
             )
         except ftplib.error_perm:
             raise RetrieverFileError
@@ -398,7 +373,7 @@ class _ftpClient(_BaseClient):
             try:
                 local_file = f"{dir}/{file.file_name}"
                 with open(local_file, "wb") as lf:
-                    lf.write(file.file_stream.getbuffer())
+                    lf.write(file.file_stream.getvalue())
                 return FileInfo.from_stat_data(
                     data=os.stat(local_file), file_name=file.file_name
                 )
@@ -417,13 +392,8 @@ class _sftpClient(_BaseClient):
     """
 
     def __init__(
-        self,
-        name: str,
-        username: str,
-        password: str,
-        host: str,
-        port: Union[str, int],
-    ):
+        self, name: str, username: str, password: str, host: str, port: str | int
+    ) -> None:
         """Initializes client instance.
 
         Args:
@@ -435,10 +405,9 @@ class _sftpClient(_BaseClient):
 
         """
         self.name = name.upper()
-        if port in [22, "22"]:
-            self.connection: paramiko.SFTPClient = self._connect_to_server(
-                username=username, password=password, host=host, port=int(port)
-            )
+        self.connection: paramiko.SFTPClient = self._connect_to_server(
+            username=username, password=password, host=host, port=int(port)
+        )
 
     def __configure_host_keys(self) -> str:
         """
@@ -479,12 +448,7 @@ class _sftpClient(_BaseClient):
             ssh = paramiko.SSHClient()
             ssh.load_system_host_keys(filename=key_file)
             ssh.set_missing_host_key_policy(paramiko.WarningPolicy())
-            ssh.connect(
-                hostname=host,
-                port=port,
-                username=username,
-                password=password,
-            )
+            ssh.connect(hostname=host, port=port, username=username, password=password)
             sftp_client = ssh.open_sftp()
             return sftp_client
         except paramiko.AuthenticationException as e:
@@ -515,7 +479,7 @@ class _sftpClient(_BaseClient):
         else:
             return False
 
-    def close(self):
+    def close(self) -> None:
         """Closes connection to server."""
         self.connection.close()
 
@@ -656,8 +620,7 @@ class _sftpClient(_BaseClient):
             try:
                 self._check_dir(dir)
                 written_file = self.connection.putfo(
-                    file.file_stream,
-                    remotepath=file.file_name,
+                    file.file_stream, remotepath=file.file_name
                 )
                 return FileInfo.from_stat_data(written_file, file_name=file.file_name)
             except OSError as e:
@@ -670,7 +633,7 @@ class _sftpClient(_BaseClient):
             try:
                 local_file = f"{dir}/{file.file_name}"
                 with open(local_file, "wb") as lf:
-                    lf.write(file.file_stream.getbuffer())
+                    lf.write(file.file_stream.getvalue())
                 return FileInfo.from_stat_data(os.stat(local_file), file.file_name)
             except OSError as e:
                 logger.error(

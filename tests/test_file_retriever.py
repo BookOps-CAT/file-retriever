@@ -1,14 +1,8 @@
-# -*- coding: utf-8 -*-
-
-
-from file_retriever import (
-    __version__,
-    __title__,
-)
+from file_retriever import __title__, __version__
 
 
 def test_version():
-    assert __version__ == "0.2.0"
+    assert __version__ == "0.3.0"
 
 
 def test_title():

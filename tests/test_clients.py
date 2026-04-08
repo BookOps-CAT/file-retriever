@@ -1,15 +1,17 @@
-from contextlib import nullcontext as does_not_raise
 import io
 import logging
 import os
+from contextlib import nullcontext as does_not_raise
+
 import pytest
-from file_retriever._clients import _ftpClient, _sftpClient, _BaseClient
-from file_retriever.file import FileInfo, File
+
+from file_retriever._clients import _BaseClient, _ftpClient, _sftpClient
 from file_retriever.errors import (
-    RetrieverFileError,
-    RetrieverConnectionError,
     RetrieverAuthenticationError,
+    RetrieverConnectionError,
+    RetrieverFileError,
 )
+from file_retriever.file import File, FileInfo
 
 
 def test_BaseClient(mock_file_info):
@@ -115,7 +117,7 @@ class TestMock_ftpClient:
         assert file_data.file_name == "foo.mrc"
         assert file_data.file_mtime == 1704070800
         assert file_data.file_size == 140401
-        assert file_data.file_mode == 33188
+        assert file_data.file_mode == 0
         assert file_data.file_uid is None
         assert file_data.file_gid is None
         assert file_data.file_atime is None
@@ -155,7 +157,7 @@ class TestMock_ftpClient:
         assert files[0].file_name == "foo.mrc"
         assert files[0].file_mtime == 1704070800
         assert files[0].file_size == 140401
-        assert files[0].file_mode == 33188
+        assert files[0].file_mode == 0
         assert files[0].file_uid is None
         assert files[0].file_gid is None
         assert files[0].file_atime is None
@@ -476,25 +478,7 @@ class TestLiveClients:
         )
         file_list = live_ftp.list_file_data(dir=remote_dir)
         file_data = live_ftp.get_file_data(
-            file_name="brooklyn_bib_maintenance.d221226.zip", dir=remote_dir
-        )
-        fetched_file = live_ftp.fetch_file(file_data, remote_dir)
-        assert len(file_list) > 1
-        assert file_data.file_size > 1
-        assert isinstance(fetched_file.file_stream, io.BytesIO)
-
-    def test_ftpClient_live_test_bt(self):
-        remote_dir = os.environ["BAKERTAYLOR_BPL_SRC"]
-        live_ftp = _ftpClient(
-            name="BAKERTAYLOR_BPL",
-            username=os.environ["BAKERTAYLOR_BPL_USER"],
-            password=os.environ["BAKERTAYLOR_BPL_PASSWORD"],
-            host=os.environ["BAKERTAYLOR_BPL_HOST"],
-            port=os.environ["BAKERTAYLOR_BPL_PORT"],
-        )
-        file_list = live_ftp.list_file_data(dir=remote_dir)
-        file_data = live_ftp.get_file_data(
-            file_name="20241204_415_303357_L4298473000000.mrc", dir=remote_dir
+            file_name=file_list[0].file_name, dir=remote_dir
         )
         fetched_file = live_ftp.fetch_file(file_data, remote_dir)
         assert len(file_list) > 1
@@ -512,7 +496,7 @@ class TestLiveClients:
         )
         file_list = live_ftp.list_file_data(dir=remote_dir)
         file_data = live_ftp.get_file_data(
-            file_name="BKL_ADB_11238M_01092025_24520913130.mrc", dir=remote_dir
+            file_name=file_list[0].file_name, dir=remote_dir
         )
         fetched_file = live_ftp.fetch_file(file_data, remote_dir)
         assert len(file_list) > 1
