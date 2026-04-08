@@ -1,10 +1,7 @@
 # -*- coding: utf-8 -*-
 
 
-from file_retriever import (
-    __title__,
-    __version__,
-)
+from file_retriever import __title__, __version__
 
 
 def test_version():

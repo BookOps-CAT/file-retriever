@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import List, Union
 
 from file_retriever._clients import _ftpClient, _sftpClient
 from file_retriever.errors import RetrieverFileError
@@ -24,7 +23,7 @@ class Client:
     """
 
     def __init__(
-        self, name: str, username: str, password: str, host: str, port: Union[str, int]
+        self, name: str, username: str, password: str, host: str, port: str | int
     ) -> None:
         """Initializes client instance.
 
@@ -48,7 +47,7 @@ class Client:
 
     def __connect_to_server(
         self, username: str, password: str
-    ) -> Union[_ftpClient, _sftpClient]:
+    ) -> _ftpClient | _sftpClient:
         match self.port:
             case 21 | "21":
                 logger.debug(f"({self.name}) Connecting to {self.host} via FTP client")
@@ -174,7 +173,7 @@ class Client:
         """
         return self.session._is_file(file_name=file_name, dir=remote_dir)
 
-    def list_file_info(self, remote_dir: str) -> List[FileInfo]:
+    def list_file_info(self, remote_dir: str) -> list[FileInfo]:
         """
         Lists metadata for each file in a directory on server.
 
@@ -187,7 +186,7 @@ class Client:
         files = self.session.list_file_data(dir=remote_dir)
         return files
 
-    def list_files(self, remote_dir: str) -> List[str]:
+    def list_files(self, remote_dir: str) -> list[str]:
         """
         Lists names of files in a directory on server.
 

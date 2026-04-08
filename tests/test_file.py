@@ -1,7 +1,9 @@
 import io
+
 import paramiko
 import pytest
-from file_retriever.file import FileInfo, File
+
+from file_retriever.file import File, FileInfo
 
 
 def test_FileInfo():
@@ -95,18 +97,9 @@ def test_FileInfo_from_stat_data_no_file_mode(mock_sftp_attr):
 @pytest.mark.parametrize(
     "str_time, mtime",
     [
-        (
-            "20240101010000",
-            1704070800,
-        ),
-        (
-            "20240202020202",
-            1706839322,
-        ),
-        (
-            "20240303030303",
-            1709434983,
-        ),
+        ("20240101010000", 1704070800),
+        ("20240202020202", 1706839322),
+        ("20240303030303", 1709434983),
     ],
 )
 def test_FileInfo_parse_mdtm_time(str_time, mtime):
@@ -119,18 +112,9 @@ def test_FileInfo_parse_mdtm_time(str_time, mtime):
 @pytest.mark.parametrize(
     "str_permissions, decimal_permissions",
     [
-        (
-            "-rw-rw-rw-",
-            33206,
-        ),
-        (
-            "-rw-r--r--",
-            33188,
-        ),
-        (
-            "-rxwrxwrxw",
-            33279,
-        ),
+        ("-rw-rw-rw-", 33206),
+        ("-rw-r--r--", 33188),
+        ("-rxwrxwrxw", 33279),
         ("-r--------", 33024),
         ("100644", 33188),
         ("100777", 33279),
@@ -182,10 +166,7 @@ def test_File():
 
 
 def test_File_from_fileinfo(mock_file_info):
-    file = File.from_fileinfo(
-        file=mock_file_info,
-        file_stream=io.BytesIO(b"foo"),
-    )
+    file = File.from_fileinfo(file=mock_file_info, file_stream=io.BytesIO(b"foo"))
     assert file.file_name == "foo.mrc"
     assert file.file_mtime == 1704070800
     assert isinstance(file.file_name, str)

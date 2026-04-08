@@ -11,7 +11,6 @@ import logging
 import os
 import stat
 from abc import ABC, abstractmethod
-from typing import Union
 
 import paramiko
 
@@ -30,19 +29,17 @@ class _BaseClient(ABC):
 
     @abstractmethod
     def __init__(
-        self, name: str, username: str, password: str, host: str, port: Union[str, int]
+        self, name: str, username: str, password: str, host: str, port: str | int
     ) -> None:
         self.name = name.upper()
-        self.connection: Union[ftplib.FTP, paramiko.SFTPClient] = (
-            self._connect_to_server(
-                username=username, password=password, host=host, port=int(port)
-            )
+        self.connection: ftplib.FTP | paramiko.SFTPClient = self._connect_to_server(
+            username=username, password=password, host=host, port=int(port)
         )
 
     @abstractmethod
     def _connect_to_server(
         self, username: str, password: str, host: str, port: int
-    ) -> Union[ftplib.FTP, paramiko.SFTPClient]:
+    ) -> ftplib.FTP | paramiko.SFTPClient:
         pass
 
     @abstractmethod
@@ -89,7 +86,7 @@ class _ftpClient(_BaseClient):
     """
 
     def __init__(
-        self, name: str, username: str, password: str, host: str, port: Union[str, int]
+        self, name: str, username: str, password: str, host: str, port: str | int
     ) -> None:
         """Initializes client instance.
 
@@ -406,7 +403,7 @@ class _sftpClient(_BaseClient):
     """
 
     def __init__(
-        self, name: str, username: str, password: str, host: str, port: Union[str, int]
+        self, name: str, username: str, password: str, host: str, port: str | int
     ) -> None:
         """Initializes client instance.
 

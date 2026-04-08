@@ -1,11 +1,12 @@
 import datetime
 import ftplib
 import os
-import paramiko
 import stat
-from typing import Dict, List, Optional
-import yaml
+
+import paramiko
 import pytest
+import yaml
+
 from file_retriever.connect import Client
 from file_retriever.file import FileInfo
 
@@ -85,7 +86,7 @@ class MockFTP:
     def mlsd(self, *args, **kwargs) -> tuple:
         raise ftplib.error_perm
 
-    def nlst(self, *args, **kwargs) -> List[str]:
+    def nlst(self, *args, **kwargs) -> list[str]:
         return [MockStatData().file_name]
 
     def pwd(self, *args, **kwargs) -> str:
@@ -129,7 +130,7 @@ class MockSFTPClient:
     def get_channel(self, *args, **kwargs) -> MockChannel:
         return MockChannel()
 
-    def getcwd(self) -> Optional[str]:
+    def getcwd(self) -> str | None:
         return None
 
     def getfo(self, remotepath, fl, *args, **kwargs) -> bytes:
@@ -138,10 +139,10 @@ class MockSFTPClient:
     def lstat(self, *args, **kwargs) -> paramiko.SFTPAttributes:
         return MockStatData().sftp_attr()
 
-    def listdir(self, *args, **kwargs) -> List[str]:
+    def listdir(self, *args, **kwargs) -> list[str]:
         return ["foo.mrc"]
 
-    def listdir_attr(self, *args, **kwargs) -> List[paramiko.SFTPAttributes]:
+    def listdir_attr(self, *args, **kwargs) -> list[paramiko.SFTPAttributes]:
         return [MockStatData().sftp_attr()]
 
     def putfo(self, *args, **kwargs) -> paramiko.SFTPAttributes:
@@ -217,12 +218,7 @@ def mock_ftpClient_mlsd(monkeypatch, mock_Client):
             "modify": MockStatData().st_mtime,
             "unix.mode": "0644",
         }
-        return [
-            (
-                name,
-                data,
-            )
-        ]
+        return [(name, data)]
 
     monkeypatch.setattr(MockFTP, "mlsd", mock_mlsd)
 
@@ -318,7 +314,7 @@ def mock_file_none_type_return(monkeypatch, mock_Client):
 
 
 @pytest.fixture
-def stub_creds() -> Dict[str, str]:
+def stub_creds() -> dict[str, str]:
     return {
         "name": "test",
         "host": "ftp.testvendor.com",
@@ -328,7 +324,7 @@ def stub_creds() -> Dict[str, str]:
 
 
 @pytest.fixture
-def stub_Client_creds() -> Dict[str, str]:
+def stub_Client_creds() -> dict[str, str]:
     return {
         "host": "ftp.testvendor.com",
         "username": "test_username",

@@ -3,7 +3,6 @@
 import datetime
 import io
 import os
-from typing import Optional, Union
 
 import paramiko
 
@@ -14,12 +13,12 @@ class FileInfo:
     def __init__(
         self,
         file_name: str,
-        file_mtime: Union[float, int, str],
-        file_mode: Union[str, int, None],
+        file_mtime: float | int | str,
+        file_mode: str | int | None,
         file_size: int,
-        file_uid: Optional[int] = None,
-        file_gid: Optional[int] = None,
-        file_atime: Optional[float] = None,
+        file_uid: int | None = None,
+        file_gid: int | None = None,
+        file_atime: float | None = None,
     ) -> None:
         """Initialize `FileInfo` object with file metadata.
 
@@ -61,8 +60,8 @@ class FileInfo:
     @classmethod
     def from_stat_data(
         cls,
-        data: Union[os.stat_result, paramiko.SFTPAttributes],
-        file_name: Optional[str] = None,
+        data: os.stat_result | paramiko.SFTPAttributes,
+        file_name: str | None = None,
     ) -> "FileInfo":
         """
         Creates a `FileInfo` object from `os.stat_result` or `paramiko.SFTPAttributes`
@@ -97,7 +96,7 @@ class FileInfo:
 
         match data.st_mode:
             case data.st_mode if isinstance(data.st_mode, int):
-                st_mode: Union[str, int] = data.st_mode
+                st_mode: str | int = data.st_mode
             case data.st_mode if (
                 isinstance(data, paramiko.SFTPAttributes)
                 and data.st_mode is None
@@ -217,13 +216,13 @@ class File(FileInfo):
     def __init__(
         self,
         file_name: str,
-        file_mtime: Union[float, str],
-        file_mode: Union[str, int, None],
+        file_mtime: float | str,
+        file_mode: str | int | None,
         file_size: int,
         file_stream: io.BytesIO,
-        file_uid: Optional[int] = None,
-        file_gid: Optional[int] = None,
-        file_atime: Optional[float] = None,
+        file_uid: int | None = None,
+        file_gid: int | None = None,
+        file_atime: float | None = None,
     ) -> None:
         """Initialize `File` object with file metadata and data stream.
 
