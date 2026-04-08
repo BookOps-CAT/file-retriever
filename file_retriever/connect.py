@@ -3,12 +3,14 @@ This module contains the `Client` class which can be used to create an ftp or
 sftp client to interact with remote storage.
 """
 
+from __future__ import annotations
+
 import logging
 import os
-from typing import List, Optional, Union
+
 from file_retriever._clients import _ftpClient, _sftpClient
-from file_retriever.file import FileInfo, File
 from file_retriever.errors import RetrieverFileError
+from file_retriever.file import File, FileInfo
 
 logger = logging.getLogger(__name__)
 
@@ -21,13 +23,8 @@ class Client:
     """
 
     def __init__(
-        self,
-        name: str,
-        username: str,
-        password: str,
-        host: str,
-        port: Union[str, int],
-    ):
+        self, name: str, username: str, password: str, host: str, port: str | int
+    ) -> None:
         """Initializes client instance.
 
         Args:
@@ -50,7 +47,7 @@ class Client:
 
     def __connect_to_server(
         self, username: str, password: str
-    ) -> Union[_ftpClient, _sftpClient]:
+    ) -> _ftpClient | _sftpClient:
         match self.port:
             case 21 | "21":
                 logger.debug(f"({self.name}) Connecting to {self.host} via FTP client")
@@ -76,7 +73,7 @@ class Client:
                 )
                 raise ValueError(f"Invalid port number: {self.port}")
 
-    def __enter__(self, *args):
+    def __enter__(self, *args: tuple) -> Client:
         """
         Allows for use of context manager with `Client` class.
 
@@ -84,7 +81,7 @@ class Client:
         """
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: tuple) -> None:
         """
         Allows for use of context manager with `Client` class.
 
@@ -92,7 +89,7 @@ class Client:
         """
         self.close()
 
-    def close(self):
+    def close(self) -> None:
         """Closes connection"""
         self.session.close()
         logger.debug(f"({self.name}) Client session closed")
@@ -159,7 +156,7 @@ class Client:
             return self.session.get_file_data(file_name=file_name, dir=remote_dir)
         except RetrieverFileError as e:
             logger.error(
-                f"({self.name}) Unable to retrieve file data for {file_name}: " f"{e}"
+                f"({self.name}) Unable to retrieve file data for {file_name}: {e}"
             )
             raise e
 
@@ -176,7 +173,7 @@ class Client:
         """
         return self.session._is_file(file_name=file_name, dir=remote_dir)
 
-    def list_file_info(self, remote_dir: str) -> List[FileInfo]:
+    def list_file_info(self, remote_dir: str) -> list[FileInfo]:
         """
         Lists metadata for each file in a directory on server.
 
@@ -189,7 +186,7 @@ class Client:
         files = self.session.list_file_data(dir=remote_dir)
         return files
 
-    def list_files(self, remote_dir: str) -> List[str]:
+    def list_files(self, remote_dir: str) -> list[str]:
         """
         Lists names of files in a directory on server.
 
@@ -202,13 +199,7 @@ class Client:
         """
         return self.session.list_file_names(dir=remote_dir)
 
-    def put_file(
-        self,
-        file: File,
-        dir: str,
-        remote: bool,
-        check: bool,
-    ) -> Optional[FileInfo]:
+    def put_file(self, file: File, dir: str, remote: bool) -> FileInfo:
         """
         Writes file to directory.
 
@@ -222,22 +213,9 @@ class Client:
 
                 If True, then file is written to `dir` on server.
                 If False, then file is written to local `dir` directory.
-            check:
-                bool indicating if directory should be checked before writing file.
-
-                If True, then `dir` will be checked for files matching the file_name
-                and file_size of `file` before writing to `dir`. If a match is found
-                then `file` will not be written.
 
         Returns:
             `FileInfo` objects representing written file
         """
-        if check and self.check_file(file=file, dir=dir, remote=remote) is True:
-            logger.debug(
-                f"({self.name}) {file.file_name} already exists in `{dir}`. "
-                f"Skipping copy."
-            )
-            return None
-        else:
-            logger.debug(f"({self.name}) Writing {file.file_name} to `{dir}`")
-            return self.session.write_file(file=file, dir=dir, remote=remote)
+        logger.debug(f"({self.name}) Writing {file.file_name} to `{dir}`")
+        return self.session.write_file(file=file, dir=dir, remote=remote)
