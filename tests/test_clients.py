@@ -117,7 +117,7 @@ class TestMock_ftpClient:
         assert file_data.file_name == "foo.mrc"
         assert file_data.file_mtime == 1704070800
         assert file_data.file_size == 140401
-        assert file_data.file_mode == 33188
+        assert file_data.file_mode == 0
         assert file_data.file_uid is None
         assert file_data.file_gid is None
         assert file_data.file_atime is None
@@ -157,7 +157,7 @@ class TestMock_ftpClient:
         assert files[0].file_name == "foo.mrc"
         assert files[0].file_mtime == 1704070800
         assert files[0].file_size == 140401
-        assert files[0].file_mode == 33188
+        assert files[0].file_mode == 0
         assert files[0].file_uid is None
         assert files[0].file_gid is None
         assert files[0].file_atime is None

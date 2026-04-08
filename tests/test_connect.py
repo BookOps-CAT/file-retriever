@@ -96,7 +96,9 @@ class TestMockClient:
         assert is_file is True
 
     @pytest.mark.parametrize("port", [21, 22])
-    def test_Client_list_file_info(self, mock_Client, stub_Client_creds, port):
+    def test_Client_list_file_info(
+        self, mock_Client, stub_Client_creds, port, mock_ftpClient_mlsd
+    ):
         stub_Client_creds["port"] = port
         connect = Client(**stub_Client_creds)
         all_files = connect.list_file_info(remote_dir="testdir")
