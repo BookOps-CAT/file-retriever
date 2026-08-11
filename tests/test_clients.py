@@ -162,6 +162,14 @@ class TestMock_ftpClient:
         assert files[0].file_gid is None
         assert files[0].file_atime is None
 
+    def test_ftpClient_list_file_data_no_files(
+        self, mock_ftpClient_no_files, stub_creds
+    ):
+        stub_creds["port"] = "21"
+        ftp = _ftpClient(**stub_creds)
+        files = ftp.list_file_data(dir="testdir")
+        assert len(files) == 0
+
     def test_ftpClient_list_file_data_mlsd(self, mock_ftpClient_mlsd, stub_creds):
         stub_creds["port"] = "21"
         ftp = _ftpClient(**stub_creds)

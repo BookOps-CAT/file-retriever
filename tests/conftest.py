@@ -209,6 +209,14 @@ def mock_Client_file_exists(monkeypatch, mock_login):
 
 
 @pytest.fixture
+def mock_ftpClient_no_files(monkeypatch, mock_Client):
+    def mock_voidcmd(*args, **kwargs):
+        pass
+
+    monkeypatch.setattr(MockFTP, "voidcmd", mock_voidcmd)
+
+
+@pytest.fixture
 def mock_ftpClient_mlsd(monkeypatch, mock_Client):
     def mock_mlsd(*args, **kwargs):
         name = MockStatData().file_name

@@ -154,6 +154,7 @@ class TestLiveClient:
             "AMALIVRE_SASB",
             "AMALIVRE_SCHOMBURG",
             "AMALIVRE_RL",
+            "AMALIVRE_COMMITTED",
         ]
         for vendor in vendors:
             live_sftp = Client(
