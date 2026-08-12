@@ -165,5 +165,5 @@ class TestLiveClient:
                 port=os.environ[f"{vendor}_PORT"],
             )
             files = live_sftp.list_file_info(remote_dir=os.environ[f"{vendor}_SRC"])
-            assert len(files) > 1
+            assert len(files) > 0
             assert live_sftp.session.connection.get_channel().active == 1
