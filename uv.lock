@@ -356,8 +356,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "paramiko", specifier = ">=4.0,<5.0" },
-    { name = "types-paramiko", specifier = ">=4.0,<5.0" },
+    { name = "paramiko", specifier = ">=4.0" },
+    { name = "types-paramiko", specifier = ">=4.0" },
 ]
 
 [package.metadata.requires-dev]
